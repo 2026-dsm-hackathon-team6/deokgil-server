@@ -169,24 +169,26 @@ class AuthServiceImplTest {
         UUID userId = UUID.randomUUID();
         User user = activeUser();
         when(jwtTokenProvider.getUserId("old-refresh-token")).thenReturn(userId);
-        when(refreshTokenRepository.matches(userId, "old-refresh-token")).thenReturn(true);
-        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(jwtTokenProvider.createAccessToken(userId)).thenReturn("new-access-token");
         when(jwtTokenProvider.createRefreshToken(userId)).thenReturn("new-refresh-token");
+        when(refreshTokenRepository.rotate(userId, "old-refresh-token", "new-refresh-token")).thenReturn(true);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
 
         RefreshResult result = authService.reissue("old-refresh-token");
 
         assertThat(result.accessToken()).isEqualTo("new-access-token");
         assertThat(result.refreshToken()).isEqualTo("new-refresh-token");
         verify(jwtTokenProvider).validateToken("old-refresh-token", org.example.deokgilserver.common.jwt.TokenType.REFRESH);
-        verify(refreshTokenRepository).save(userId, "new-refresh-token");
+        verify(refreshTokenRepository).rotate(userId, "old-refresh-token", "new-refresh-token");
     }
 
     @Test
     void 저장된_값과_일치하지_않는_리프레시_토큰은_INVALID_TOKEN_예외가_발생한다() {
         UUID userId = UUID.randomUUID();
         when(jwtTokenProvider.getUserId("reused-token")).thenReturn(userId);
-        when(refreshTokenRepository.matches(userId, "reused-token")).thenReturn(false);
+        when(jwtTokenProvider.createAccessToken(userId)).thenReturn("new-access-token");
+        when(jwtTokenProvider.createRefreshToken(userId)).thenReturn("new-refresh-token");
+        when(refreshTokenRepository.rotate(userId, "reused-token", "new-refresh-token")).thenReturn(false);
 
         assertThatThrownBy(() -> authService.reissue("reused-token"))
                 .isInstanceOf(BusinessException.class)
@@ -217,7 +219,9 @@ class AuthServiceImplTest {
                 .status(UserStatus.WITHDRAW)
                 .build();
         when(jwtTokenProvider.getUserId("old-refresh-token")).thenReturn(userId);
-        when(refreshTokenRepository.matches(userId, "old-refresh-token")).thenReturn(true);
+        when(jwtTokenProvider.createAccessToken(userId)).thenReturn("new-access-token");
+        when(jwtTokenProvider.createRefreshToken(userId)).thenReturn("new-refresh-token");
+        when(refreshTokenRepository.rotate(userId, "old-refresh-token", "new-refresh-token")).thenReturn(true);
         when(userRepository.findById(userId)).thenReturn(Optional.of(withdrawnUser));
 
         assertThatThrownBy(() -> authService.reissue("old-refresh-token"))
@@ -226,7 +230,6 @@ class AuthServiceImplTest {
                 .isEqualTo(ErrorCode.WITHDRAWN_USER);
 
         verify(refreshTokenRepository).delete(userId);
-        verify(jwtTokenProvider, never()).createAccessToken(any());
     }
 
     @Test
