@@ -93,6 +93,11 @@ public class SecurityConfig {
     @Order(2)
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
+                // CorsConfig가 정의한 CorsConfigurationSource 빈을 사용한다. CORS 자체는 "이 요청을
+                // 허용할지" 브라우저에게 알려주는 응답 헤더일 뿐 인증과 무관하므로, 아래
+                // authorizeHttpRequests에서 프리플라이트(OPTIONS)를 별도로 permitAll 해줘야
+                // 실제 요청 전에 브라우저가 보내는 예비 확인 요청이 401로 막히지 않는다.
+                .cors(Customizer.withDefaults())
                 // 더블 서브밋 쿠키(double-submit cookie) 패턴: 서버가 CSRF 토큰을 (httpOnly=false)
                 // 쿠키로 내려주면, 같은 출처(same-origin)의 JS만 그 값을 읽어 X-XSRF-TOKEN 헤더에
                 // 실을 수 있다. 공격자 사이트는 쿠키 값을 읽을 수 없으니 헤더를 위조하지 못한다 —
@@ -109,6 +114,7 @@ public class SecurityConfig {
                 .formLogin(form -> form.disable())
                 .httpBasic(basic -> basic.disable())
                 .authorizeHttpRequests(auth -> auth
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(PERMIT_ALL_PATHS).permitAll()
                         .anyRequest().authenticated()
                 )
