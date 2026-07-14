@@ -6,7 +6,8 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.example.deokgilserver.common.BaseTimeEntity;
-import org.example.deokgilserver.common.security.EncryptedBigDecimalConverter;
+import org.example.deokgilserver.common.security.EncryptedScheduleLatitudeConverter;
+import org.example.deokgilserver.common.security.EncryptedScheduleLongitudeConverter;
 import org.example.deokgilserver.domain.event.domain.Event;
 import org.example.deokgilserver.domain.schedule.domain.enums.ScheduleStatus;
 import org.example.deokgilserver.domain.schedule.domain.enums.ScheduleType;
@@ -47,11 +48,11 @@ public class Schedule extends BaseTimeEntity {
     // 현재 코드 경로상 이 필드들은 아직 채워지는 곳이 없지만(AI 일정 생성이 좌표까지는
     // 채우지 않음), Event.latitude/longitude와 같은 성격의 데이터라 같은 방식으로
     // 암호화해둔다 — 나중에 일정 단위 좌표를 쓰게 되어도 별도 마이그레이션이 필요 없도록.
-    @Convert(converter = EncryptedBigDecimalConverter.class)
+    @Convert(converter = EncryptedScheduleLatitudeConverter.class)
     @Column(name = "latitude")
     private BigDecimal latitude; // 일정 장소 위도 (암호화 저장)
 
-    @Convert(converter = EncryptedBigDecimalConverter.class)
+    @Convert(converter = EncryptedScheduleLongitudeConverter.class)
     @Column(name = "longitude")
     private BigDecimal longitude; // 일정 장소 경도 (암호화 저장)
 
