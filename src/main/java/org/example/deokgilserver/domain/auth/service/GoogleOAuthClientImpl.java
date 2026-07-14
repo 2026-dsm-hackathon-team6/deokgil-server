@@ -61,6 +61,11 @@ public class GoogleOAuthClientImpl implements GoogleOAuthClient {
      * 이미 사용됐거나 만료된 code로 재시도해도 여기서 실패하므로, code 탈취 후 재생(replay)
      * 공격의 유효 기간이 매우 짧다.
      */
+    // redirect_uri는 프론트가 인가 코드를 받아온 방식과 정확히 일치해야 한다: 프론트가 팝업
+    // 플로우(Google Identity Services의 ux_mode: 'popup')를 쓴다면 이 값은 실제 URL이 아니라
+    // 문자열 그대로 "postmessage"여야 하고, 리다이렉트 플로우라면 Google Cloud Console에 등록한
+    // 실제 콜백 URL이어야 한다. 둘이 안 맞으면 Google이 invalid_grant/redirect_uri_mismatch로
+    // 거부한다 — GOOGLE_REDIRECT_URI 환경변수를 프론트의 실제 플로우에 맞게 설정할 것.
     private String requestAccessToken(String authorizationCode) {
         MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
         form.add("code", authorizationCode);
