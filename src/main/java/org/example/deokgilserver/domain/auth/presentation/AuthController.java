@@ -48,6 +48,9 @@ public class AuthController {
         return new AuthResponse(tokenResult.accessToken(), tokenResult.user());
     }
 
+    // SecurityConfig에서 permitAll이라 Authorization 헤더(access token) 없이도 호출 가능하다 —
+    // 애초에 access token이 만료됐을 때 새로 받으려고 부르는 API이므로 그게 맞다. 대신 refresh
+    // token(쿠키) 자체의 유효성은 AuthService.reissue 내부에서 별도로 검증된다.
     @PostMapping("/reissue")
     public AuthResponse reissue(
             @CookieValue(name = RefreshTokenCookieProvider.COOKIE_NAME, required = false) String refreshToken,

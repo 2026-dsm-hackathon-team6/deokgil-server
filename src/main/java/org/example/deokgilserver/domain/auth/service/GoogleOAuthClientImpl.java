@@ -16,6 +16,14 @@ import org.springframework.web.reactive.function.client.WebClient;
 
 import java.time.Duration;
 
+/**
+ * OAuth 2.0 authorization code flow의 서버 사이드(백엔드) 파트를 담당한다.
+ * 인가 코드(authorization code) 자체는 Google 로그인 화면에서 프론트가 받아오고, 이 클래스는
+ * 그 코드를 받아 (1) access token으로 교환 → (2) 그 access token으로 사용자 정보를 조회하는,
+ * "code를 절대 프론트에서 직접 Google API 호출에 쓰지 않는" 표준 흐름만 수행한다.
+ * client_secret은 이 서버(기밀 유지 가능한 환경)에서만 다루고 프론트로 내려가지 않는다는 점이
+ * 이 플로우가 안전한 이유다.
+ */
 @Slf4j
 @Component
 public class GoogleOAuthClientImpl implements GoogleOAuthClient {
@@ -47,6 +55,12 @@ public class GoogleOAuthClientImpl implements GoogleOAuthClient {
         return requestUserInfo(accessToken);
     }
 
+    /**
+     * authorization code는 1회용이며 Google이 발급 시점의 client_id/redirect_uri와 정확히
+     * 일치하는 요청에서만 access token으로 교환해준다(둘 중 하나라도 다르면 invalid_grant).
+     * 이미 사용됐거나 만료된 code로 재시도해도 여기서 실패하므로, code 탈취 후 재생(replay)
+     * 공격의 유효 기간이 매우 짧다.
+     */
     private String requestAccessToken(String authorizationCode) {
         MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
         form.add("code", authorizationCode);
@@ -90,6 +104,11 @@ public class GoogleOAuthClientImpl implements GoogleOAuthClient {
             if (response == null || response.sub() == null || response.email() == null) {
                 throw new BusinessException(ErrorCode.GOOGLE_AUTH_FAILED);
             }
+            // email_verified가 false인 이메일을 신뢰하면, 공격자가 아직 소유권 확인이 안 된
+            // (또는 확인 절차가 느슨한) 이메일 주소로 타인의 이메일을 사칭해 가입할 수 있다.
+            // 계정 매칭 자체는 email이 아니라 googleId(sub, Google이 보장하는 불변 식별자)로
+            // 하므로 계정 탈취까지 이어지진 않지만, 신뢰할 수 없는 이메일이 알림 발송 등에
+            // 쓰이는 걸 막기 위해 여기서 걸러낸다.
             if (!Boolean.TRUE.equals(response.emailVerified())) {
                 log.warn("Google 계정의 이메일이 인증되지 않았습니다: sub={}", response.sub());
                 throw new BusinessException(ErrorCode.GOOGLE_AUTH_FAILED);
