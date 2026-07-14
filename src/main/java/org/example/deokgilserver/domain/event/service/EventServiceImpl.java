@@ -10,11 +10,15 @@ import org.example.deokgilserver.domain.event.presentation.dto.request.CreateEve
 import org.example.deokgilserver.domain.event.presentation.dto.request.ExtractEventRequest;
 import org.example.deokgilserver.domain.event.presentation.dto.response.CreateEventResponse;
 import org.example.deokgilserver.domain.event.presentation.dto.response.EventDetailResponse;
+import org.example.deokgilserver.domain.event.presentation.dto.response.EventHistoryItemResponse;
+import org.example.deokgilserver.domain.event.presentation.dto.response.EventHistoryResponse;
 import org.example.deokgilserver.domain.event.presentation.dto.response.EventListResponse;
 import org.example.deokgilserver.domain.event.presentation.dto.response.EventSummaryResponse;
 import org.example.deokgilserver.domain.event.presentation.dto.response.ExtractEventResponse;
 import org.example.deokgilserver.domain.event.repository.EventRepository;
 import org.example.deokgilserver.domain.notification.repository.NotificationRepository;
+import org.example.deokgilserver.domain.notification.service.NotificationService;
+import org.example.deokgilserver.domain.schedule.domain.enums.ScheduleStatus;
 import org.example.deokgilserver.domain.schedule.presentation.dto.response.ScheduleResponse;
 import org.example.deokgilserver.domain.schedule.repository.ScheduleRepository;
 import org.example.deokgilserver.domain.user.domain.User;
@@ -39,6 +43,7 @@ public class EventServiceImpl implements EventService {
     private final NotificationRepository notificationRepository;
     private final ChecklistRepository checklistRepository;
     private final EventExtractionClient eventExtractionClient;
+    private final NotificationService notificationService;
 
     public EventServiceImpl(
             EventRepository eventRepository,
@@ -46,7 +51,8 @@ public class EventServiceImpl implements EventService {
             ScheduleRepository scheduleRepository,
             NotificationRepository notificationRepository,
             ChecklistRepository checklistRepository,
-            EventExtractionClient eventExtractionClient
+            EventExtractionClient eventExtractionClient,
+            NotificationService notificationService
     ) {
         this.eventRepository = eventRepository;
         this.userRepository = userRepository;
@@ -54,6 +60,7 @@ public class EventServiceImpl implements EventService {
         this.notificationRepository = notificationRepository;
         this.checklistRepository = checklistRepository;
         this.eventExtractionClient = eventExtractionClient;
+        this.notificationService = notificationService;
     }
 
     @Override
@@ -72,6 +79,8 @@ public class EventServiceImpl implements EventService {
                 .createdType(EventCreatedType.MANUAL)
                 .status(EventStatus.ACTIVE)
                 .build());
+
+        notificationService.scheduleEventNotifications(event);
 
         return new CreateEventResponse(event.getId(), event.getTitle(), event.getStartAt(), event.getEndAt(),
                 "행사가 등록되었습니다.");
@@ -93,7 +102,9 @@ public class EventServiceImpl implements EventService {
         }
 
         event.delete();
-        scheduleRepository.deleteByEventId(eventId);
+        // Schedule은 자체 Soft Delete(status/deletedAt)를 갖고 있어 개별 일정 삭제와 동일하게
+        // 맞춘다. Notification/Checklist는 별도 이력 개념이 없는 하드 삭제 대상이라 그대로 둔다.
+        scheduleRepository.softDeleteByEventId(eventId, LocalDateTime.now());
         notificationRepository.deleteByEventId(eventId);
         checklistRepository.deleteByEventId(eventId);
     }
@@ -108,7 +119,9 @@ public class EventServiceImpl implements EventService {
             throw new BusinessException(ErrorCode.EVENT_ACCESS_DENIED);
         }
 
-        List<ScheduleResponse> schedules = scheduleRepository.findByEventIdOrderByStartAtAsc(eventId).stream()
+        List<ScheduleResponse> schedules = scheduleRepository
+                .findByEventIdAndStatusOrderByStartAtAsc(eventId, ScheduleStatus.ACTIVE)
+                .stream()
                 .map(ScheduleResponse::from)
                 .toList();
 
@@ -143,11 +156,37 @@ public class EventServiceImpl implements EventService {
         return new EventListResponse(summaries);
     }
 
+    @Override
+    public EventHistoryResponse getEventHistory(UUID userId) {
+        getActiveUser(userId);
+
+        List<Event> pastEvents = eventRepository.findByUserIdAndStatusAndEndAtBeforeOrderByStartAtDesc(
+                userId, EventStatus.ACTIVE, LocalDateTime.now());
+
+        if (pastEvents.isEmpty()) {
+            throw new BusinessException(ErrorCode.EVENT_NOT_FOUND);
+        }
+
+        List<EventHistoryItemResponse> history = pastEvents.stream()
+                .map(EventHistoryItemResponse::from)
+                .toList();
+
+        return new EventHistoryResponse(history);
+    }
+
     private User getActiveUser(UUID userId) {
         return userRepository.findByIdAndStatus(userId, UserStatus.ACTIVE)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
     }
 
+    /**
+     * IDOR(Insecure Direct Object Reference) 방지: eventId만으로 바로 조회/조작하지 않고,
+     * 반드시 요청자(JWT에서 나온 userId)가 그 행사의 소유자인지 함께 검증한다. 이 검증이
+     * 없으면 로그인한 사용자가 eventId(UUID)를 추측하거나 다른 API 응답에서 알아내
+     * 다른 사람의 행사를 조회/삭제할 수 있다. 이 패턴은 Checklist/Schedule/Route/Briefing
+     * 서비스에도 동일하게 반복된다 — 소유권 검증 없이 리소스 ID만 받는 서비스 메서드를
+     * 추가하지 않도록 주의할 것.
+     */
     private Event getOwnedEvent(UUID userId, UUID eventId, ErrorCode notFoundCode) {
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new BusinessException(notFoundCode));

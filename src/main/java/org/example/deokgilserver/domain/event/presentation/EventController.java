@@ -4,10 +4,15 @@ import jakarta.validation.Valid;
 import org.example.deokgilserver.common.dto.MessageResponse;
 import org.example.deokgilserver.domain.event.presentation.dto.request.CreateEventRequest;
 import org.example.deokgilserver.domain.event.presentation.dto.request.ExtractEventRequest;
+import org.example.deokgilserver.domain.event.presentation.dto.response.BriefingResponse;
 import org.example.deokgilserver.domain.event.presentation.dto.response.CreateEventResponse;
 import org.example.deokgilserver.domain.event.presentation.dto.response.EventDetailResponse;
+import org.example.deokgilserver.domain.event.presentation.dto.response.EventHistoryResponse;
 import org.example.deokgilserver.domain.event.presentation.dto.response.EventListResponse;
+import org.example.deokgilserver.domain.event.presentation.dto.response.EventMapResponse;
 import org.example.deokgilserver.domain.event.presentation.dto.response.ExtractEventResponse;
+import org.example.deokgilserver.domain.event.service.BriefingService;
+import org.example.deokgilserver.domain.event.service.EventMapService;
 import org.example.deokgilserver.domain.event.service.EventService;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
@@ -22,9 +27,13 @@ import java.util.UUID;
 public class EventController {
 
     private final EventService eventService;
+    private final BriefingService briefingService;
+    private final EventMapService eventMapService;
 
-    public EventController(EventService eventService) {
+    public EventController(EventService eventService, BriefingService briefingService, EventMapService eventMapService) {
         this.eventService = eventService;
+        this.briefingService = briefingService;
+        this.eventMapService = eventMapService;
     }
 
     @PostMapping
@@ -45,6 +54,11 @@ public class EventController {
         return eventService.getUpcomingEvents(userId, pageable);
     }
 
+    @GetMapping("/history")
+    public EventHistoryResponse getEventHistory(@AuthenticationPrincipal UUID userId) {
+        return eventService.getEventHistory(userId);
+    }
+
     @GetMapping("/{eventId}")
     public EventDetailResponse getEvent(@AuthenticationPrincipal UUID userId, @PathVariable UUID eventId) {
         return eventService.getEvent(userId, eventId);
@@ -54,5 +68,15 @@ public class EventController {
     public MessageResponse deleteEvent(@AuthenticationPrincipal UUID userId, @PathVariable UUID eventId) {
         eventService.deleteEvent(userId, eventId);
         return new MessageResponse("이벤트가 삭제되었습니다.");
+    }
+
+    @GetMapping("/{eventId}/briefing")
+    public BriefingResponse getBriefing(@AuthenticationPrincipal UUID userId, @PathVariable UUID eventId) {
+        return briefingService.getBriefing(userId, eventId);
+    }
+
+    @GetMapping("/{eventId}/map")
+    public EventMapResponse getEventMap(@AuthenticationPrincipal UUID userId, @PathVariable UUID eventId) {
+        return eventMapService.getEventMap(userId, eventId);
     }
 }

@@ -4,6 +4,7 @@ import org.example.deokgilserver.domain.event.presentation.dto.request.CreateEve
 import org.example.deokgilserver.domain.event.presentation.dto.request.ExtractEventRequest;
 import org.example.deokgilserver.domain.event.presentation.dto.response.CreateEventResponse;
 import org.example.deokgilserver.domain.event.presentation.dto.response.EventDetailResponse;
+import org.example.deokgilserver.domain.event.presentation.dto.response.EventHistoryResponse;
 import org.example.deokgilserver.domain.event.presentation.dto.response.EventListResponse;
 import org.example.deokgilserver.domain.event.presentation.dto.response.ExtractEventResponse;
 import org.springframework.data.domain.Pageable;
@@ -21,4 +22,6 @@ public interface EventService {
     EventDetailResponse getEvent(UUID userId, UUID eventId);
 
     EventListResponse getUpcomingEvents(UUID userId, Pageable pageable);
+
+    EventHistoryResponse getEventHistory(UUID userId);
 }
