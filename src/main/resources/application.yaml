@@ -83,6 +83,28 @@ claude:
     key: ${CLAUDE_API_KEY}
 
 
+# 카카오 로컬 API (주소 -> 좌표 변환)
+kakao:
+  api:
+    key: ${KAKAO_API_KEY}
+
+
+# 기상청 단기예보 조회서비스 (공공데이터포털 발급 서비스키)
+weather:
+  api:
+    key: ${WEATHER_API_KEY}
+
+
+# Firebase Cloud Messaging (푸시 알림) - Firebase 콘솔에서 발급받은 서비스 계정 JSON 키 파일 경로
+firebase:
+  credentials-path: ${FIREBASE_CREDENTIALS_PATH}
+
+
+# 위치(위경도) 컬럼 암호화 키 - openssl rand -base64 32 로 생성한 256bit 키
+location:
+  encryption-key: ${LOCATION_ENCRYPTION_KEY}
+
+
 # Swagger / OpenAPI - 운영 환경에서는 SWAGGER_ENABLED=false 로 반드시 비활성화할 것
 springdoc:
   api-docs:
