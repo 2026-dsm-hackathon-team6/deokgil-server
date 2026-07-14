@@ -6,10 +6,12 @@ import org.example.deokgilserver.domain.event.domain.enums.EventCreatedType;
 import org.example.deokgilserver.domain.event.domain.enums.EventStatus;
 import org.example.deokgilserver.domain.notification.domain.Notification;
 import org.example.deokgilserver.domain.notification.domain.enums.NotificationType;
+import org.example.deokgilserver.domain.notification.presentation.dto.response.NotificationListResponse;
 import org.example.deokgilserver.domain.notification.repository.NotificationRepository;
 import org.example.deokgilserver.domain.user.domain.User;
 import org.example.deokgilserver.domain.user.domain.enums.UserRole;
 import org.example.deokgilserver.domain.user.domain.enums.UserStatus;
+import org.example.deokgilserver.domain.user.repository.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -19,6 +21,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -34,11 +37,13 @@ class NotificationServiceImplTest {
     private NotificationRepository notificationRepository;
     @Mock
     private PushNotificationClient pushNotificationClient;
+    @Mock
+    private UserRepository userRepository;
 
     private NotificationServiceImpl notificationService;
 
     private NotificationServiceImpl newService() {
-        return new NotificationServiceImpl(notificationRepository, pushNotificationClient);
+        return new NotificationServiceImpl(notificationRepository, pushNotificationClient, userRepository);
     }
 
     private User user(String fcmToken) {
@@ -150,5 +155,43 @@ class NotificationServiceImplTest {
 
         assertThat(failing.getSentAt()).isNull();
         assertThat(succeeding.getSentAt()).isNotNull();
+    }
+
+    // ===== getNotifications =====
+
+    @Test
+    void 사용자의_알림을_최신순으로_조회한다() {
+        notificationService = newService();
+        UUID userId = UUID.randomUUID();
+        User owner = user("token");
+        ReflectionTestUtils.setField(owner, "id", userId);
+        Event event = event(owner, LocalDateTime.now().plusDays(1));
+        Notification latest = notification(UUID.randomUUID(), event, NotificationType.DEPARTURE, LocalDateTime.now().plusHours(23));
+        Notification earlier = notification(UUID.randomUUID(), event, NotificationType.DAY_BEFORE, LocalDateTime.now().plusHours(1));
+
+        when(userRepository.findByIdAndStatus(userId, UserStatus.ACTIVE)).thenReturn(Optional.of(owner));
+        when(notificationRepository.findByEvent_User_IdOrderByNotifyAtDesc(userId))
+                .thenReturn(List.of(latest, earlier));
+
+        NotificationListResponse response = notificationService.getNotifications(userId);
+
+        assertThat(response.notifications()).hasSize(2);
+        assertThat(response.notifications().get(0).type()).isEqualTo(NotificationType.DEPARTURE);
+        assertThat(response.notifications().get(0).title()).isEqualTo("출발할 시간이에요");
+        assertThat(response.notifications().get(1).type()).isEqualTo(NotificationType.DAY_BEFORE);
+    }
+
+    @Test
+    void 존재하지_않는_사용자면_예외가_발생한다() {
+        notificationService = newService();
+        UUID userId = UUID.randomUUID();
+        when(userRepository.findByIdAndStatus(userId, UserStatus.ACTIVE)).thenReturn(Optional.empty());
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> notificationService.getNotifications(userId))
+                .isInstanceOf(org.example.deokgilserver.common.exception.BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(org.example.deokgilserver.common.exception.ErrorCode.USER_NOT_FOUND);
+
+        verifyNoInteractions(notificationRepository);
     }
 }

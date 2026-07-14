@@ -1,12 +1,18 @@
 package org.example.deokgilserver.domain.notification.service;
 
 import lombok.extern.slf4j.Slf4j;
+import org.example.deokgilserver.common.exception.BusinessException;
+import org.example.deokgilserver.common.exception.ErrorCode;
 import org.example.deokgilserver.common.push.PushNotificationClient;
 import org.example.deokgilserver.domain.event.domain.Event;
 import org.example.deokgilserver.domain.notification.domain.Notification;
 import org.example.deokgilserver.domain.notification.domain.enums.NotificationType;
+import org.example.deokgilserver.domain.notification.presentation.dto.response.NotificationListResponse;
+import org.example.deokgilserver.domain.notification.presentation.dto.response.NotificationResponse;
 import org.example.deokgilserver.domain.notification.repository.NotificationRepository;
 import org.example.deokgilserver.domain.user.domain.User;
+import org.example.deokgilserver.domain.user.domain.enums.UserStatus;
+import org.example.deokgilserver.domain.user.repository.UserRepository;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -14,6 +20,7 @@ import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * 알림 시각 계산은 전부 행사 시작/종료 시각(event.startAt/endAt) 기준의 단순한 고정 오프셋이다.
@@ -32,13 +39,16 @@ public class NotificationServiceImpl implements NotificationService {
 
     private final NotificationRepository notificationRepository;
     private final PushNotificationClient pushNotificationClient;
+    private final UserRepository userRepository;
 
     public NotificationServiceImpl(
             NotificationRepository notificationRepository,
-            PushNotificationClient pushNotificationClient
+            PushNotificationClient pushNotificationClient,
+            UserRepository userRepository
     ) {
         this.notificationRepository = notificationRepository;
         this.pushNotificationClient = pushNotificationClient;
+        this.userRepository = userRepository;
     }
 
     @Override
@@ -92,34 +102,24 @@ public class NotificationServiceImpl implements NotificationService {
             return;
         }
 
-        pushNotificationClient.send(user.getFcmToken(), titleFor(notification), bodyFor(notification));
+        pushNotificationClient.send(
+                user.getFcmToken(),
+                NotificationMessageFactory.titleFor(notification),
+                NotificationMessageFactory.bodyFor(notification)
+        );
         notification.markSent();
     }
 
-    private String titleFor(Notification notification) {
-        return switch (notification.getType()) {
-            case DAY_BEFORE -> "내일은 " + notification.getEvent().getTitle() + " 행사날이에요";
-            case DEPARTURE -> "출발할 시간이에요";
-            case PERFORMANCE_START -> "곧 시작해요";
-            case RETURN -> "행사가 끝났어요";
-        };
-    }
+    @Override
+    public NotificationListResponse getNotifications(UUID userId) {
+        userRepository.findByIdAndStatus(userId, UserStatus.ACTIVE)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
-    private String bodyFor(Notification notification) {
-        Event event = notification.getEvent();
-        return switch (notification.getType()) {
-            case DAY_BEFORE -> "내일 " + formatTime(event.getStartAt()) + "에 " + safePlace(event) + "에서 시작해요. 준비물을 미리 확인해보세요.";
-            case DEPARTURE -> safePlace(event) + "까지 이동할 시간이에요. 늦지 않게 출발하세요!";
-            case PERFORMANCE_START -> event.getTitle() + "이(가) 곧 시작합니다.";
-            case RETURN -> "오늘 하루도 고생 많으셨어요. 안전하게 귀가하세요.";
-        };
-    }
+        List<NotificationResponse> notifications = notificationRepository
+                .findByEvent_User_IdOrderByNotifyAtDesc(userId).stream()
+                .map(NotificationResponse::from)
+                .toList();
 
-    private String safePlace(Event event) {
-        return StringUtils.hasText(event.getPlaceName()) ? event.getPlaceName() : "행사장";
-    }
-
-    private String formatTime(LocalDateTime time) {
-        return "%02d:%02d".formatted(time.getHour(), time.getMinute());
+        return new NotificationListResponse(notifications);
     }
 }

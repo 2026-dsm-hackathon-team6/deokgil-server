@@ -1,6 +1,9 @@
 package org.example.deokgilserver.domain.notification.service;
 
 import org.example.deokgilserver.domain.event.domain.Event;
+import org.example.deokgilserver.domain.notification.presentation.dto.response.NotificationListResponse;
+
+import java.util.UUID;
 
 public interface NotificationService {
 
@@ -9,4 +12,7 @@ public interface NotificationService {
 
     // 발송 시각이 지난, 아직 안 보낸 알림들을 찾아 실제로 푸시를 보낸다.
     void dispatchDueNotifications();
+
+    // 특정 사용자의 알림을 최신순으로 조회한다.
+    NotificationListResponse getNotifications(UUID userId);
 }
