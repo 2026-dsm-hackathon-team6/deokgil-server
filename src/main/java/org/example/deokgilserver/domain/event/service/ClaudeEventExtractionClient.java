@@ -8,13 +8,13 @@ import com.anthropic.models.messages.StructuredMessageCreateParams;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import org.example.deokgilserver.common.exception.BusinessException;
 import org.example.deokgilserver.common.exception.ErrorCode;
+import org.example.deokgilserver.common.net.SsrfProtectedUrlValidator;
 import org.example.deokgilserver.domain.event.presentation.dto.response.ExtractEventResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import java.net.URI;
-import java.net.URISyntaxException;
 import java.time.LocalDateTime;
 
 @Component
@@ -28,12 +28,15 @@ public class ClaudeEventExtractionClient implements EventExtractionClient {
 
     private final WebClient webClient;
     private final AnthropicClient anthropicClient;
+    private final SsrfProtectedUrlValidator ssrfUrlValidator;
 
     public ClaudeEventExtractionClient(
             WebClient.Builder webClientBuilder,
+            SsrfProtectedUrlValidator ssrfUrlValidator,
             @Value("${claude.api.key}") String claudeApiKey
     ) {
         this.webClient = webClientBuilder.build();
+        this.ssrfUrlValidator = ssrfUrlValidator;
         this.anthropicClient = AnthropicOkHttpClient.builder()
                 .apiKey(claudeApiKey)
                 .build();
@@ -41,28 +44,16 @@ public class ClaudeEventExtractionClient implements EventExtractionClient {
 
     @Override
     public ExtractEventResponse extract(String eventUrl) {
-        validateUrl(eventUrl);
-        String pageContent = fetchPage(eventUrl);
+        URI validatedUri = ssrfUrlValidator.validate(eventUrl);
+        String pageContent = fetchPage(validatedUri);
         ExtractedFields extracted = requestExtraction(pageContent);
         return toResponse(extracted, eventUrl);
     }
 
-    private void validateUrl(String eventUrl) {
-        try {
-            URI uri = new URI(eventUrl);
-            if (uri.getScheme() == null || uri.getHost() == null
-                    || !(uri.getScheme().equals("http") || uri.getScheme().equals("https"))) {
-                throw new BusinessException(ErrorCode.INVALID_URL);
-            }
-        } catch (URISyntaxException e) {
-            throw new BusinessException(ErrorCode.INVALID_URL);
-        }
-    }
-
-    private String fetchPage(String eventUrl) {
+    private String fetchPage(URI eventUri) {
         try {
             String html = webClient.get()
-                    .uri(eventUrl)
+                    .uri(eventUri)
                     .retrieve()
                     .bodyToMono(String.class)
                     .block();
