@@ -4,6 +4,7 @@ import jakarta.servlet.FilterChain;
 import org.example.deokgilserver.common.exception.BusinessException;
 import org.example.deokgilserver.common.exception.ErrorCode;
 import org.example.deokgilserver.common.jwt.JwtTokenProvider;
+import org.example.deokgilserver.common.jwt.TokenType;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -50,7 +51,7 @@ class JwtAuthenticationFilterTest {
         request.addHeader("Authorization", "Bearer valid-token");
         MockHttpServletResponse response = new MockHttpServletResponse();
 
-        doNothing().when(jwtTokenProvider).validateToken("valid-token");
+        doNothing().when(jwtTokenProvider).validateToken("valid-token", TokenType.ACCESS);
         when(jwtTokenProvider.getUserId("valid-token")).thenReturn(userId);
 
         filter.doFilter(request, response, filterChain);
@@ -79,7 +80,7 @@ class JwtAuthenticationFilterTest {
         MockHttpServletResponse response = new MockHttpServletResponse();
 
         doThrow(new BusinessException(ErrorCode.INVALID_TOKEN))
-                .when(jwtTokenProvider).validateToken("invalid-token");
+                .when(jwtTokenProvider).validateToken("invalid-token", TokenType.ACCESS);
 
         filter.doFilter(request, response, filterChain);
 

@@ -3,6 +3,7 @@ package org.example.deokgilserver.domain.auth.service;
 import org.example.deokgilserver.common.exception.BusinessException;
 import org.example.deokgilserver.common.exception.ErrorCode;
 import org.example.deokgilserver.common.jwt.JwtTokenProvider;
+import org.example.deokgilserver.common.jwt.TokenType;
 import org.example.deokgilserver.domain.auth.presentation.GoogleOAuthClient;
 import org.example.deokgilserver.domain.auth.presentation.dto.GoogleUserInfo;
 import org.example.deokgilserver.domain.auth.presentation.dto.request.GoogleAuthRequest;
@@ -93,7 +94,7 @@ public class AuthServiceImpl implements AuthService {
             throw new BusinessException(ErrorCode.INVALID_TOKEN);
         }
 
-        jwtTokenProvider.validateToken(refreshToken);
+        jwtTokenProvider.validateToken(refreshToken, TokenType.REFRESH);
         UUID userId = jwtTokenProvider.getUserId(refreshToken);
 
         if (!refreshTokenRepository.matches(userId, refreshToken)) {

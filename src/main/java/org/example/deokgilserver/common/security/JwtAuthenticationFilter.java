@@ -5,6 +5,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.example.deokgilserver.common.jwt.JwtTokenProvider;
+import org.example.deokgilserver.common.jwt.TokenType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
@@ -39,7 +40,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         if (StringUtils.hasText(token)) {
             try {
-                jwtTokenProvider.validateToken(token);
+                jwtTokenProvider.validateToken(token, TokenType.ACCESS);
                 UUID userId = jwtTokenProvider.getUserId(token);
 
                 // 별도 인가(authority) 개념 없이 인증 여부만 판단한다(List.of()로 권한 목록 비움).

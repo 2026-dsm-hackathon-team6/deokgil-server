@@ -178,7 +178,7 @@ class AuthServiceImplTest {
 
         assertThat(result.accessToken()).isEqualTo("new-access-token");
         assertThat(result.refreshToken()).isEqualTo("new-refresh-token");
-        verify(jwtTokenProvider).validateToken("old-refresh-token");
+        verify(jwtTokenProvider).validateToken("old-refresh-token", org.example.deokgilserver.common.jwt.TokenType.REFRESH);
         verify(refreshTokenRepository).save(userId, "new-refresh-token");
     }
 

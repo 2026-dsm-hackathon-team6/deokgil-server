@@ -43,10 +43,39 @@ class JwtTokenProviderTest {
     }
 
     @Test
-    void 유효한_토큰은_검증에_성공한다() {
+    void 액세스_토큰은_ACCESS_타입_검증에_성공한다() {
         String token = jwtTokenProvider.createAccessToken(UUID.randomUUID());
 
-        assertThatCode_validateToken(token);
+        jwtTokenProvider.validateToken(token, TokenType.ACCESS);
+    }
+
+    @Test
+    void 리프레시_토큰은_REFRESH_타입_검증에_성공한다() {
+        String token = jwtTokenProvider.createRefreshToken(UUID.randomUUID());
+
+        jwtTokenProvider.validateToken(token, TokenType.REFRESH);
+    }
+
+    // 이 테스트가 이번 수정의 핵심이다: 탈취한 refresh token을 Authorization 헤더에 그대로
+    // 실어 access token 대신 쓰는 공격을 막는지 확인한다.
+    @Test
+    void 리프레시_토큰으로_액세스_토큰_검증을_시도하면_INVALID_TOKEN_예외가_발생한다() {
+        String refreshToken = jwtTokenProvider.createRefreshToken(UUID.randomUUID());
+
+        assertThatThrownBy(() -> jwtTokenProvider.validateToken(refreshToken, TokenType.ACCESS))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.INVALID_TOKEN);
+    }
+
+    @Test
+    void 액세스_토큰으로_리프레시_토큰_검증을_시도하면_INVALID_TOKEN_예외가_발생한다() {
+        String accessToken = jwtTokenProvider.createAccessToken(UUID.randomUUID());
+
+        assertThatThrownBy(() -> jwtTokenProvider.validateToken(accessToken, TokenType.REFRESH))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.INVALID_TOKEN);
     }
 
     @Test
@@ -55,7 +84,7 @@ class JwtTokenProviderTest {
         JwtTokenProvider expiredTokenProvider = new JwtTokenProvider(expiredProperties);
         String expiredToken = expiredTokenProvider.createAccessToken(UUID.randomUUID());
 
-        assertThatThrownBy(() -> jwtTokenProvider.validateToken(expiredToken))
+        assertThatThrownBy(() -> jwtTokenProvider.validateToken(expiredToken, TokenType.ACCESS))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.TOKEN_EXPIRED);
@@ -65,7 +94,7 @@ class JwtTokenProviderTest {
     void 위조된_토큰은_INVALID_TOKEN_예외가_발생한다() {
         String tamperedToken = jwtTokenProvider.createAccessToken(UUID.randomUUID()) + "tampered";
 
-        assertThatThrownBy(() -> jwtTokenProvider.validateToken(tamperedToken))
+        assertThatThrownBy(() -> jwtTokenProvider.validateToken(tamperedToken, TokenType.ACCESS))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.INVALID_TOKEN);
@@ -77,7 +106,7 @@ class JwtTokenProviderTest {
         JwtTokenProvider otherTokenProvider = new JwtTokenProvider(otherProperties);
         String tokenFromOtherIssuer = otherTokenProvider.createAccessToken(UUID.randomUUID());
 
-        assertThatThrownBy(() -> jwtTokenProvider.validateToken(tokenFromOtherIssuer))
+        assertThatThrownBy(() -> jwtTokenProvider.validateToken(tokenFromOtherIssuer, TokenType.ACCESS))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.INVALID_TOKEN);
@@ -85,13 +114,9 @@ class JwtTokenProviderTest {
 
     @Test
     void 형식이_올바르지_않은_토큰은_INVALID_TOKEN_예외가_발생한다() {
-        assertThatThrownBy(() -> jwtTokenProvider.validateToken("not-a-jwt-token"))
+        assertThatThrownBy(() -> jwtTokenProvider.validateToken("not-a-jwt-token", TokenType.ACCESS))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.INVALID_TOKEN);
-    }
-
-    private void assertThatCode_validateToken(String token) {
-        jwtTokenProvider.validateToken(token);
     }
 }
