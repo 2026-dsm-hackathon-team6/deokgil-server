@@ -32,7 +32,7 @@ import java.util.Map;
 @Component
 public class KmaWeatherClient implements WeatherClient {
 
-    private static final String FORECAST_URI = "http://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst";
+    private static final String FORECAST_URI = "https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst";
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(5);
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd");
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HHmm");
