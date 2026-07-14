@@ -19,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -27,6 +28,11 @@ import java.util.UUID;
 @Service
 @Transactional(readOnly = true)
 public class ScheduleServiceImpl implements ScheduleService {
+
+    // AI가 한 번에 만들 수 있는 일정 개수 상한. 프롬프트 인젝션 등으로 AI가 비정상적으로 많은
+    // 항목을 반환해도 DB/응답 크기가 무한정 커지지 않도록 막는다.
+    private static final int MAX_GENERATED_SCHEDULES = 50;
+    private static final int MAX_TITLE_LENGTH = 200;
 
     private final EventRepository eventRepository;
     private final UserRepository userRepository;
@@ -59,6 +65,7 @@ public class ScheduleServiceImpl implements ScheduleService {
         }
 
         List<GeneratedSchedule> generated = scheduleExtractionClient.generate(event, request);
+        validateGeneratedSchedules(event, generated);
 
         List<Schedule> saved = scheduleRepository.saveAll(
                 generated.stream()
@@ -137,27 +144,69 @@ public class ScheduleServiceImpl implements ScheduleService {
 
     // 같은 행사 내 활성 일정끼리 시간이 겹치는지 확인한다. update()로 인한 변경은 같은 영속성
     // 컨텍스트 안에서 자동 flush되므로, 여기서 다시 조회하면 방금 반영한 값이 그대로 보인다.
-    //
+    private void validateNoOverlap(UUID eventId) {
+        List<Schedule> schedules = scheduleRepository
+                .findByEventIdAndStatusOrderByStartAtAsc(eventId, ScheduleStatus.ACTIVE);
+
+        assertNoOverlap(schedules.stream()
+                .map(s -> new TimeRange(s.getStartAt(), s.getEndAt()))
+                .toList());
+    }
+
+    /**
+     * AI가 생성한 일정을 저장하기 전에 검증한다. AI 응답은 신뢰할 수 없는 외부 입력으로 취급해야
+     * 한다 — 구조화 출력(structured output)은 JSON 형식만 강제할 뿐, 시간이 뒤바뀌었거나 행사
+     * 기간을 벗어나거나 서로 겹치는 등 의미적으로 잘못된 값까지 막아주지는 않는다. 사용자가 직접
+     * 수정할 때 거치는 applyUpdate()의 시간 검증과 최대한 같은 기준을 적용한다.
+     */
+    private void validateGeneratedSchedules(Event event, List<GeneratedSchedule> generated) {
+        if (generated == null || generated.isEmpty() || generated.size() > MAX_GENERATED_SCHEDULES) {
+            throw new BusinessException(ErrorCode.INVALID_SCHEDULE_LIST);
+        }
+
+        for (GeneratedSchedule item : generated) {
+            if (item.title() == null || item.title().isBlank() || item.title().length() > MAX_TITLE_LENGTH
+                    || item.startAt() == null) {
+                throw new BusinessException(ErrorCode.INVALID_SCHEDULE_LIST);
+            }
+            if (item.endAt() != null && !item.endAt().isAfter(item.startAt())) {
+                throw new BusinessException(ErrorCode.INVALID_TIME_RANGE);
+            }
+            if (item.startAt().isBefore(event.getStartAt()) || item.startAt().isAfter(event.getEndAt())
+                    || (item.endAt() != null && item.endAt().isAfter(event.getEndAt()))) {
+                throw new BusinessException(ErrorCode.INVALID_TIME_RANGE);
+            }
+        }
+
+        assertNoOverlap(generated.stream()
+                .map(item -> new TimeRange(item.startAt(), item.endAt()))
+                .toList());
+    }
+
     // 시작 시간 순으로만 정렬해서 "바로 앞 항목"과만 비교하면 비인접 구간과의 겹침을 놓친다
     // (예: A 00:00~02:00, B 00:10~00:20, C 00:50~01:00 은 시작 순으로 A,B,C인데 C를 B의
     // 종료(00:20)와만 비교하면 실제로 겹치는 A~C 구간을 놓치게 된다). 그래서 지금까지 본 일정
     // 중 가장 늦게 끝나는 시각(maxEndSoFar)을 계속 갱신하며 비교하는 스윕라인 방식을 쓴다.
     // endAt이 없는 일정은 시작 시각과 동일한 순간의 일(zero-duration)로 취급한다.
-    private void validateNoOverlap(UUID eventId) {
-        List<Schedule> schedules = scheduleRepository
-                .findByEventIdAndStatusOrderByStartAtAsc(eventId, ScheduleStatus.ACTIVE);
+    private void assertNoOverlap(List<TimeRange> ranges) {
+        List<TimeRange> sorted = ranges.stream()
+                .sorted(Comparator.comparing(TimeRange::start))
+                .toList();
 
         LocalDateTime maxEndSoFar = null;
-        for (Schedule schedule : schedules) {
-            if (maxEndSoFar != null && schedule.getStartAt().isBefore(maxEndSoFar)) {
+        for (TimeRange range : sorted) {
+            if (maxEndSoFar != null && range.start().isBefore(maxEndSoFar)) {
                 throw new BusinessException(ErrorCode.SCHEDULE_OVERLAP);
             }
 
-            LocalDateTime end = schedule.getEndAt() != null ? schedule.getEndAt() : schedule.getStartAt();
+            LocalDateTime end = range.end() != null ? range.end() : range.start();
             if (maxEndSoFar == null || end.isAfter(maxEndSoFar)) {
                 maxEndSoFar = end;
             }
         }
+    }
+
+    private record TimeRange(LocalDateTime start, LocalDateTime end) {
     }
 
     @Override
