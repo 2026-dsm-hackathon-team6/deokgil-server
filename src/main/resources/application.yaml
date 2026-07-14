@@ -106,8 +106,10 @@ location:
 
 
 # CORS 허용 origin (콤마로 구분) - 로컬 프론트 개발 서버 + 실제 배포 도메인
+# 값을 안 넣어도 로컬 개발 기본값(Vite 개발 서버)으로 뜨도록 기본값을 둔다.
+# 배포 도메인은 반드시 CORS_ALLOWED_ORIGINS로 명시적으로 추가할 것.
 cors:
-  allowed-origins: ${CORS_ALLOWED_ORIGINS}
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
 
 
 # Swagger / OpenAPI - 운영 환경에서는 SWAGGER_ENABLED=false 로 반드시 비활성화할 것
