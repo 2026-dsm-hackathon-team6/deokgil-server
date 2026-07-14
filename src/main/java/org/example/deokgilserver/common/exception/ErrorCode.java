@@ -25,6 +25,26 @@ public enum ErrorCode {
     MISSING_EVENT_INFO(HttpStatus.BAD_REQUEST, "필수 행사 정보가 부족합니다."),
     AI_API_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "AI 분석 중 오류가 발생했습니다."),
 
+    EVENT_LOCATION_REQUIRED(HttpStatus.BAD_REQUEST, "행사 위치 정보가 없어 체크리스트를 생성할 수 없습니다."),
+    GEOCODING_FAILED(HttpStatus.BAD_REQUEST, "행사 주소의 위치를 확인할 수 없습니다."),
+    WEATHER_API_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "날씨 정보를 가져오는 중 오류가 발생했습니다."),
+    AI_GENERATION_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "AI 생성에 실패했습니다."),
+
+    EVENT_ALREADY_STARTED(HttpStatus.BAD_REQUEST, "이미 시작된 행사입니다."),
+    SCHEDULE_ALREADY_EXISTS(HttpStatus.BAD_REQUEST, "이미 생성된 일정이 있습니다."),
+    SCHEDULE_ACCESS_DENIED(HttpStatus.FORBIDDEN, "일정에 대한 권한이 없습니다."),
+    SCHEDULE_ALREADY_DELETED(HttpStatus.BAD_REQUEST, "이미 삭제된 일정입니다."),
+    INVALID_SCHEDULE_LIST(HttpStatus.BAD_REQUEST, "수정할 일정 정보가 없습니다."),
+    INVALID_TIME_RANGE(HttpStatus.BAD_REQUEST, "일정 시간이 올바르지 않습니다."),
+    SCHEDULE_OVERLAP(HttpStatus.BAD_REQUEST, "일정 시간이 중복됩니다."),
+
+    INVALID_LOCATION(HttpStatus.BAD_REQUEST, "위치 정보가 올바르지 않습니다."),
+    ROUTE_GENERATION_FAILED(HttpStatus.BAD_REQUEST, "동선 생성에 실패했습니다."),
+    MAP_API_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "지도 API 호출 중 오류가 발생했습니다."),
+    LOCATION_NOT_FOUND(HttpStatus.NOT_FOUND, "행사장 위치 정보가 없습니다."),
+
+    RATE_LIMIT_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS, "요청이 너무 많습니다. 잠시 후 다시 시도해주세요."),
+
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "서버 내부 오류가 발생했습니다.");
 
     private final HttpStatus status;
