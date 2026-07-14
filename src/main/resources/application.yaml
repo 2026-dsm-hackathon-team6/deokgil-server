@@ -31,6 +31,10 @@ spring:
     redis:
       host: ${REDIS_HOST}
       port: ${REDIS_PORT}
+    # 클라이언트가 ?size=로 페이지 크기를 임의로 키워 DB/응답 메모리에 부담을 주는 것을 방지.
+    web:
+      pageable:
+        max-page-size: 50
 
 
   # OAuth2
@@ -112,12 +116,19 @@ cors:
   allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
 
 
-# Swagger / OpenAPI - 운영 환경에서는 SWAGGER_ENABLED=false 로 반드시 비활성화할 것
+# Rate limit: 신뢰 가능한 리버스 프록시 뒤가 아니면 false로 둘 것(RateLimitFilter 참고).
+rate-limit:
+  trust-forwarded-for: ${RATE_LIMIT_TRUST_FORWARDED_FOR:false}
+
+
+# Swagger / OpenAPI - 기본값은 비활성화(false). 로컬 개발에서 켜려면 SWAGGER_ENABLED=true를
+# 명시적으로 설정할 것 — 운영 배포 시 환경변수 누락으로 실수로 노출되는 사고를 막기 위해 기본값을
+# 안전한 쪽(비활성화)으로 둔다.
 springdoc:
   api-docs:
-    enabled: ${SWAGGER_ENABLED:true}
+    enabled: ${SWAGGER_ENABLED:false}
   swagger-ui:
-    enabled: ${SWAGGER_ENABLED:true}
+    enabled: ${SWAGGER_ENABLED:false}
     path: /swagger-ui.html
 
 
