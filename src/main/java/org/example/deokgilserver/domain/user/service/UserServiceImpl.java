@@ -4,6 +4,7 @@ import org.example.deokgilserver.common.exception.BusinessException;
 import org.example.deokgilserver.common.exception.ErrorCode;
 import org.example.deokgilserver.domain.user.domain.User;
 import org.example.deokgilserver.domain.user.domain.enums.UserStatus;
+import org.example.deokgilserver.domain.user.presentation.dto.request.UpdateFcmTokenRequest;
 import org.example.deokgilserver.domain.user.presentation.dto.request.UpdateProfileRequest;
 import org.example.deokgilserver.domain.user.presentation.dto.response.UserResponse;
 import org.example.deokgilserver.domain.user.repository.UserRepository;
@@ -35,6 +36,13 @@ public class UserServiceImpl implements UserService {
     public void withdraw(UUID userId) {
         User user = getActiveUser(userId);
         user.withdraw();
+    }
+
+    @Override
+    @Transactional
+    public void updateFcmToken(UUID userId, UpdateFcmTokenRequest request) {
+        User user = getActiveUser(userId);
+        user.updateFcmToken(request.fcmToken());
     }
 
     private User getActiveUser(UUID userId) {

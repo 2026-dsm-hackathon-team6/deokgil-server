@@ -35,6 +35,9 @@ public class User extends BaseTimeEntity {
     @Column(name = "profile_image")
     private String profileImage; // 프로필 이미지 URL
 
+    @Column(name = "fcm_token")
+    private String fcmToken; // 푸시 알림용 FCM 디바이스 토큰
+
     @Enumerated(EnumType.STRING)
     @Column(name = "role", nullable = false)
     private UserRole role; // 사용자 권한
@@ -65,5 +68,9 @@ public class User extends BaseTimeEntity {
     public void updateProfile(String nickname, String profileImage) {
         this.nickname = nickname;
         this.profileImage = profileImage;
+    }
+
+    public void updateFcmToken(String fcmToken) {
+        this.fcmToken = fcmToken;
     }
 }

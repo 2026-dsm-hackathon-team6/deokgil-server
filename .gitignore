@@ -40,3 +40,7 @@ out/
 .env
 .env.*
 !.env.example
+
+### Firebase ###
+firebase-service-account*.json
+*firebase-adminsdk*.json
