@@ -1,3 +1,100 @@
+# Server
+server:
+  port: ${SERVER_PORT}
+
+
+# Spring
 spring:
   application:
     name: deokgil-server
+
+
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+
+  jpa:
+    hibernate:
+      ddl-auto: ${DDL_AUTO}
+    properties:
+      hibernate:
+        format_sql: ${JPA_FORMAT_SQL}
+        show_sql: ${JPA_SHOW_SQL}
+        dialect: org.hibernate.dialect.MySQLDialect
+
+
+  # Redis
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
+
+
+  # OAuth2
+  security:
+    oauth2:
+      client:
+        registration:
+
+          google:
+            client-id: ${GOOGLE_CLIENT_ID}
+            client-secret: ${GOOGLE_CLIENT_SECRET}
+            redirect-uri: ${GOOGLE_REDIRECT_URI}
+            scope:
+              - openid
+              - profile
+              - email
+
+
+## AWS S3
+#cloud:
+#  aws:
+#    region:
+#      static: ${AWS_REGION}
+#
+#    credentials:
+#      access-key: ${AWS_ACCESS_KEY}
+#      secret-key: ${AWS_SECRET_KEY}
+#
+#    s3:
+#      bucket: ${AWS_S3_BUCKET}
+
+
+# JWT
+jwt:
+  secret: ${JWT_SECRET}
+  access-token-expiration: ${JWT_ACCESS_EXPIRATION}
+  refresh-token-expiration: ${JWT_REFRESH_EXPIRATION}
+
+
+# Refresh Token Cookie
+cookie:
+  secure: ${COOKIE_SECURE}
+  same-site: ${COOKIE_SAME_SITE}
+  domain: ${COOKIE_DOMAIN}
+
+
+# claude AI API
+claude:
+  api:
+    key: ${CLAUDE_API_KEY}
+
+
+# Swagger / OpenAPI - 운영 환경에서는 SWAGGER_ENABLED=false 로 반드시 비활성화할 것
+springdoc:
+  api-docs:
+    enabled: ${SWAGGER_ENABLED:true}
+  swagger-ui:
+    enabled: ${SWAGGER_ENABLED:true}
+    path: /swagger-ui.html
+
+
+# Logging
+logging:
+  level:
+    root: ${LOG_LEVEL}
+    org.hibernate.SQL: ${HIBERNATE_SQL_LOG_LEVEL}
+    org.hibernate.orm.jdbc.bind: ${HIBERNATE_BIND_LOG_LEVEL}
