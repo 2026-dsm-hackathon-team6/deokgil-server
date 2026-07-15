@@ -53,18 +53,13 @@ spring:
               - email
 
 
-## AWS S3
-#cloud:
-#  aws:
-#    region:
-#      static: ${AWS_REGION}
-#
-#    credentials:
-#      access-key: ${AWS_ACCESS_KEY}
-#      secret-key: ${AWS_SECRET_KEY}
-#
-#    s3:
-#      bucket: ${AWS_S3_BUCKET}
+# AWS S3 (프로필 이미지 업로드용 presigned URL 발급에 사용)
+aws:
+  region: ${AWS_REGION}
+  access-key: ${AWS_ACCESS_KEY}
+  secret-key: ${AWS_SECRET_KEY}
+  s3:
+    bucket: ${AWS_S3_BUCKET}
 
 
 # JWT

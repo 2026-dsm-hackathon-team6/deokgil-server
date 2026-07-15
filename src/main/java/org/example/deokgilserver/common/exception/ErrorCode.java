@@ -17,6 +17,7 @@ public enum ErrorCode {
     EVENT_NOT_FOUND(HttpStatus.NOT_FOUND, "이벤트를 찾을 수 없습니다."),
     EVENT_ACCESS_DENIED(HttpStatus.FORBIDDEN, "이벤트에 대한 권한이 없습니다."),
     EVENT_ALREADY_DELETED(HttpStatus.BAD_REQUEST, "이미 삭제된 이벤트입니다."),
+    EVENT_NOT_ENDED(HttpStatus.BAD_REQUEST, "아직 종료되지 않은 행사입니다."),
     SCHEDULE_NOT_FOUND(HttpStatus.NOT_FOUND, "등록된 일정이 없습니다."),
 
     INVALID_URL(HttpStatus.BAD_REQUEST, "올바르지 않은 URL입니다."),
@@ -44,6 +45,8 @@ public enum ErrorCode {
     LOCATION_NOT_FOUND(HttpStatus.NOT_FOUND, "행사장 위치 정보가 없습니다."),
 
     RATE_LIMIT_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS, "요청이 너무 많습니다. 잠시 후 다시 시도해주세요."),
+
+    UNSUPPORTED_IMAGE_TYPE(HttpStatus.BAD_REQUEST, "지원하지 않는 이미지 형식입니다."),
 
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "서버 내부 오류가 발생했습니다.");
 

@@ -2,6 +2,7 @@ package org.example.deokgilserver;
 
 import org.example.deokgilserver.common.jwt.JwtProperties;
 import org.example.deokgilserver.common.security.CookieProperties;
+import org.example.deokgilserver.common.storage.S3Properties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -10,7 +11,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 @EnableJpaAuditing
 @EnableScheduling
-@EnableConfigurationProperties({JwtProperties.class, CookieProperties.class})
+@EnableConfigurationProperties({JwtProperties.class, CookieProperties.class, S3Properties.class})
 @SpringBootApplication
 public class DeokgilServerApplication {
 
