@@ -25,4 +25,7 @@ public interface ScheduleRepository extends JpaRepository<Schedule, UUID> {
     @Query("update Schedule s set s.status = org.example.deokgilserver.domain.schedule.domain.enums.ScheduleStatus.DELETED, "
             + "s.deletedAt = :deletedAt where s.event.id = :eventId and s.status = org.example.deokgilserver.domain.schedule.domain.enums.ScheduleStatus.ACTIVE")
     void softDeleteByEventId(@Param("eventId") UUID eventId, @Param("deletedAt") LocalDateTime deletedAt);
+
+    // 행사 자체가 하드 삭제될 때(회원 탈퇴 등) 함께 완전히 삭제한다.
+    void deleteByEventId(UUID eventId);
 }

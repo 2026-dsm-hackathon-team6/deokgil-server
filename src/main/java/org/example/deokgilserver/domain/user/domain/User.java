@@ -9,7 +9,6 @@ import org.example.deokgilserver.common.BaseTimeEntity;
 import org.example.deokgilserver.domain.user.domain.enums.UserRole;
 import org.example.deokgilserver.domain.user.domain.enums.UserStatus;
 
-import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Getter
@@ -42,12 +41,12 @@ public class User extends BaseTimeEntity {
     @Column(name = "role", nullable = false)
     private UserRole role; // 사용자 권한
 
+    // WITHDRAW는 탈퇴가 물리 삭제(UserServiceImpl.withdraw())로 바뀌면서 신규로는 더 이상
+    // 만들어지지 않는다 - 다만 과거에 소프트 삭제로 저장된 레거시 데이터가 남아있을 수 있어
+    // enum 값 자체와 AuthServiceImpl의 WITHDRAWN_USER 분기는 방어 차원으로 유지한다.
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
     private UserStatus status; // 회원 상태
-
-    @Column(name = "deleted_at")
-    private LocalDateTime deletedAt; // 탈퇴 시간 (Soft Delete)
 
     @Builder
     public User(String googleId, String email, String nickname, String profileImage,
@@ -60,11 +59,6 @@ public class User extends BaseTimeEntity {
         this.status = status;
     }
 
-    public void withdraw() {
-        this.status = UserStatus.WITHDRAW;
-        this.deletedAt = LocalDateTime.now();
-    }
-
     public void updateProfile(String nickname, String profileImage) {
         this.nickname = nickname;
         this.profileImage = profileImage;
@@ -72,5 +66,11 @@ public class User extends BaseTimeEntity {
 
     public void updateFcmToken(String fcmToken) {
         this.fcmToken = fcmToken;
+    }
+
+    // 만료/폐기된 토큰으로 매 스케줄 주기마다 헛되이 재발송을 시도하지 않도록 비운다
+    // (NotificationServiceImpl.dispatchOne 참고).
+    public void clearFcmToken() {
+        this.fcmToken = null;
     }
 }
