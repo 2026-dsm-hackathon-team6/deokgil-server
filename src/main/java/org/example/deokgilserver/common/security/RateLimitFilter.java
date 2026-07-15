@@ -14,6 +14,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.AntPathMatcher;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.web.util.UrlPathHelper;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -33,20 +34,36 @@ import java.util.List;
 public class RateLimitFilter extends OncePerRequestFilter {
 
     private static final AntPathMatcher PATH_MATCHER = new AntPathMatcher();
+    // HttpServletRequest.getRequestURI()는 퍼센트 인코딩을 디코딩하지 않은 원본 문자열을
+    // 반환한다(서블릿 스펙). 반면 Spring MVC는 라우팅 시 경로를 디코딩해서 컨트롤러를 찾으므로,
+    // 이 필터가 getRequestURI()를 그대로 매칭에 쓰면 "/api/v1/auth/re%69ssue"처럼 알파벳 한
+    // 글자만 퍼센트 인코딩한 요청이 컨트롤러에는 "/reissue"로 정상 라우팅되면서도 이 필터의
+    // 문자열 매칭은 통과해버려(불일치) 레이트리밋이 통째로 우회된다. UrlPathHelper로 Spring이
+    // 실제 라우팅에 쓰는 것과 동일하게 디코딩된 경로를 얻어 매칭해야 이 우회가 막힌다.
+    private static final UrlPathHelper URL_PATH_HELPER = new UrlPathHelper();
 
     // (HTTP 메서드, 경로 패턴, 제한) — 경로에 {eventId} 같은 변수가 들어가는 엔드포인트가 있어
     // 문자열 완전 일치 대신 Ant 스타일 패턴 매칭을 사용한다.
     private static final List<RateLimitRule> RULES = List.of(
             new RateLimitRule("POST", "/api/v1/auth/login/google", new Limit(10, Duration.ofMinutes(1))),
             new RateLimitRule("POST", "/api/v1/auth/signup/google", new Limit(5, Duration.ofMinutes(1))),
+            // 인증 없이 호출 가능한 데다(SecurityConfig permitAll) 매 호출마다 S3 오브젝트 키를
+            // 소모시킬 수 있어 signup/google과 같은 수준으로 제한한다.
+            new RateLimitRule("POST", "/api/v1/auth/signup/profile-image/presigned-url", new Limit(5, Duration.ofMinutes(1))),
             new RateLimitRule("POST", "/api/v1/auth/reissue", new Limit(20, Duration.ofMinutes(1))),
+            // logout도 reissue와 마찬가지로 access token 없이 호출 가능해졌으므로(SecurityConfig
+            // permitAll) 동일하게 남용 방지 대상에 포함한다.
+            new RateLimitRule("POST", "/api/v1/auth/logout", new Limit(20, Duration.ofMinutes(1))),
             // 아래는 전부 Anthropic/카카오/기상청 등 비용이 드는 외부 API를 호출하는 엔드포인트다.
             new RateLimitRule("POST", "/api/v1/events/extract", new Limit(10, Duration.ofMinutes(1))),
             new RateLimitRule("POST", "/api/v1/events/{eventId}/checklist", new Limit(10, Duration.ofMinutes(1))),
             new RateLimitRule("POST", "/api/v1/events/{eventId}/schedules/generate", new Limit(10, Duration.ofMinutes(1))),
             new RateLimitRule("GET", "/api/v1/events/{eventId}/briefing", new Limit(20, Duration.ofMinutes(1))),
             new RateLimitRule("GET", "/api/v1/events/{eventId}/map", new Limit(20, Duration.ofMinutes(1))),
-            new RateLimitRule("POST", "/api/v1/routes/recommend", new Limit(20, Duration.ofMinutes(1)))
+            new RateLimitRule("POST", "/api/v1/routes/recommend", new Limit(20, Duration.ofMinutes(1))),
+            // presigned URL 발급 자체는 저비용이지만, 매 호출마다 S3에 새 오브젝트 키 하나씩을
+            // 소모시킬 수 있어(실제 업로드로 이어지지 않아도) 무제한 발급을 막는다.
+            new RateLimitRule("POST", "/api/v1/users/me/profile-image/presigned-url", new Limit(10, Duration.ofMinutes(1)))
     );
 
     private static final String KEY_PREFIX = "rate-limit:";
@@ -70,14 +87,15 @@ public class RateLimitFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
-        Limit limit = matchLimit(request);
+        String path = URL_PATH_HELPER.getLookupPathForRequest(request);
+        Limit limit = matchLimit(request, path);
 
         if (limit == null) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        String key = KEY_PREFIX + request.getMethod() + ":" + request.getRequestURI() + ":" + resolveClientIp(request);
+        String key = KEY_PREFIX + request.getMethod() + ":" + path + ":" + resolveClientIp(request);
         Long count = redisTemplate.opsForValue().increment(key);
         if (count != null && count == 1L) {
             redisTemplate.expire(key, limit.window());
@@ -91,10 +109,10 @@ public class RateLimitFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
-    private Limit matchLimit(HttpServletRequest request) {
+    private Limit matchLimit(HttpServletRequest request, String path) {
         for (RateLimitRule rule : RULES) {
             if (rule.method().equals(request.getMethod())
-                    && PATH_MATCHER.match(rule.pathPattern(), request.getRequestURI())) {
+                    && PATH_MATCHER.match(rule.pathPattern(), path)) {
                 return rule.limit();
             }
         }
