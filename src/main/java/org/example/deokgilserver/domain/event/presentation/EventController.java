@@ -7,6 +7,7 @@ import org.example.deokgilserver.domain.event.presentation.dto.request.ExtractEv
 import org.example.deokgilserver.domain.event.presentation.dto.response.BriefingResponse;
 import org.example.deokgilserver.domain.event.presentation.dto.response.CreateEventResponse;
 import org.example.deokgilserver.domain.event.presentation.dto.response.EventDetailResponse;
+import org.example.deokgilserver.domain.event.presentation.dto.response.EventHistoryDetailResponse;
 import org.example.deokgilserver.domain.event.presentation.dto.response.EventHistoryResponse;
 import org.example.deokgilserver.domain.event.presentation.dto.response.EventListResponse;
 import org.example.deokgilserver.domain.event.presentation.dto.response.EventMapResponse;
@@ -57,6 +58,12 @@ public class EventController {
     @GetMapping("/history")
     public EventHistoryResponse getEventHistory(@AuthenticationPrincipal UUID userId) {
         return eventService.getEventHistory(userId);
+    }
+
+    @GetMapping("/history/{eventId}")
+    public EventHistoryDetailResponse getEventHistoryDetail(@AuthenticationPrincipal UUID userId,
+                                                              @PathVariable UUID eventId) {
+        return eventService.getEventHistoryDetail(userId, eventId);
     }
 
     @GetMapping("/{eventId}")

@@ -4,6 +4,7 @@ import org.example.deokgilserver.domain.event.presentation.dto.request.CreateEve
 import org.example.deokgilserver.domain.event.presentation.dto.request.ExtractEventRequest;
 import org.example.deokgilserver.domain.event.presentation.dto.response.CreateEventResponse;
 import org.example.deokgilserver.domain.event.presentation.dto.response.EventDetailResponse;
+import org.example.deokgilserver.domain.event.presentation.dto.response.EventHistoryDetailResponse;
 import org.example.deokgilserver.domain.event.presentation.dto.response.EventHistoryResponse;
 import org.example.deokgilserver.domain.event.presentation.dto.response.EventListResponse;
 import org.example.deokgilserver.domain.event.presentation.dto.response.ExtractEventResponse;
@@ -24,4 +25,6 @@ public interface EventService {
     EventListResponse getUpcomingEvents(UUID userId, Pageable pageable);
 
     EventHistoryResponse getEventHistory(UUID userId);
+
+    EventHistoryDetailResponse getEventHistoryDetail(UUID userId, UUID eventId);
 }

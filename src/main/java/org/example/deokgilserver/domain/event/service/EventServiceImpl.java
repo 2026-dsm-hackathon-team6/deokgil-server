@@ -10,8 +10,10 @@ import org.example.deokgilserver.domain.event.presentation.dto.request.CreateEve
 import org.example.deokgilserver.domain.event.presentation.dto.request.ExtractEventRequest;
 import org.example.deokgilserver.domain.event.presentation.dto.response.CreateEventResponse;
 import org.example.deokgilserver.domain.event.presentation.dto.response.EventDetailResponse;
+import org.example.deokgilserver.domain.event.presentation.dto.response.EventHistoryDetailResponse;
 import org.example.deokgilserver.domain.event.presentation.dto.response.EventHistoryItemResponse;
 import org.example.deokgilserver.domain.event.presentation.dto.response.EventHistoryResponse;
+import org.example.deokgilserver.domain.event.presentation.dto.response.EventHistoryScheduleResponse;
 import org.example.deokgilserver.domain.event.presentation.dto.response.EventListResponse;
 import org.example.deokgilserver.domain.event.presentation.dto.response.EventSummaryResponse;
 import org.example.deokgilserver.domain.event.presentation.dto.response.ExtractEventResponse;
@@ -24,6 +26,7 @@ import org.example.deokgilserver.domain.schedule.repository.ScheduleRepository;
 import org.example.deokgilserver.domain.user.domain.User;
 import org.example.deokgilserver.domain.user.domain.enums.UserStatus;
 import org.example.deokgilserver.domain.user.repository.UserRepository;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -33,6 +36,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @Transactional(readOnly = true)
 public class EventServiceImpl implements EventService {
@@ -81,6 +85,7 @@ public class EventServiceImpl implements EventService {
                 .build());
 
         notificationService.scheduleEventNotifications(event);
+        log.info("행사 등록 완료: userId={}, eventId={}", userId, event.getId());
 
         return new CreateEventResponse(event.getId(), event.getTitle(), event.getStartAt(), event.getEndAt(),
                 "행사가 등록되었습니다.");
@@ -88,7 +93,10 @@ public class EventServiceImpl implements EventService {
 
     @Override
     public ExtractEventResponse extractEvent(ExtractEventRequest request) {
-        return eventExtractionClient.extract(request.eventUrl());
+        log.info("AI 행사 정보 추출 요청: url={}", request.eventUrl());
+        ExtractEventResponse response = eventExtractionClient.extract(request.eventUrl());
+        log.info("AI 행사 정보 추출 완료: title={}", response.title());
+        return response;
     }
 
     @Override
@@ -107,6 +115,7 @@ public class EventServiceImpl implements EventService {
         scheduleRepository.softDeleteByEventId(eventId, LocalDateTime.now());
         notificationRepository.deleteByEventId(eventId);
         checklistRepository.deleteByEventId(eventId);
+        log.info("행사 삭제 완료: userId={}, eventId={}", userId, eventId);
     }
 
     @Override
@@ -124,10 +133,6 @@ public class EventServiceImpl implements EventService {
                 .stream()
                 .map(ScheduleResponse::from)
                 .toList();
-
-        if (schedules.isEmpty()) {
-            throw new BusinessException(ErrorCode.SCHEDULE_NOT_FOUND);
-        }
 
         return new EventDetailResponse(
                 event.getId(),
@@ -172,6 +177,40 @@ public class EventServiceImpl implements EventService {
                 .toList();
 
         return new EventHistoryResponse(history);
+    }
+
+    @Override
+    public EventHistoryDetailResponse getEventHistoryDetail(UUID userId, UUID eventId) {
+        getActiveUser(userId);
+        Event event = eventRepository.findByIdAndStatus(eventId, EventStatus.ACTIVE)
+                .orElseThrow(() -> new BusinessException(ErrorCode.EVENT_NOT_FOUND));
+
+        if (!event.getUser().getId().equals(userId)) {
+            throw new BusinessException(ErrorCode.EVENT_ACCESS_DENIED);
+        }
+
+        // 목록(getEventHistory)과 동일한 "지난 행사" 기준(endAt < now)을 상세 조회에서도
+        // 지켜서, 아직 종료되지 않은 행사를 이 API로 우회 조회하지 못하게 한다.
+        if (event.getEndAt().isAfter(LocalDateTime.now())) {
+            throw new BusinessException(ErrorCode.EVENT_NOT_ENDED);
+        }
+
+        List<EventHistoryScheduleResponse> schedules = scheduleRepository
+                .findByEventIdAndStatusOrderByStartAtAsc(eventId, ScheduleStatus.ACTIVE)
+                .stream()
+                .map(EventHistoryScheduleResponse::from)
+                .toList();
+
+        return new EventHistoryDetailResponse(
+                event.getId(),
+                event.getTitle(),
+                event.getPlaceName(),
+                event.getAddress(),
+                event.getStartAt(),
+                event.getEndAt(),
+                true,
+                schedules
+        );
     }
 
     private User getActiveUser(UUID userId) {

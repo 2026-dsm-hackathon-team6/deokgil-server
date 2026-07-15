@@ -6,12 +6,16 @@ import org.example.deokgilserver.domain.checklist.repository.ChecklistRepository
 import org.example.deokgilserver.domain.event.domain.Event;
 import org.example.deokgilserver.domain.event.domain.enums.EventCreatedType;
 import org.example.deokgilserver.domain.event.domain.enums.EventStatus;
+import org.example.deokgilserver.domain.event.presentation.dto.response.EventHistoryDetailResponse;
 import org.example.deokgilserver.domain.event.presentation.dto.response.EventHistoryResponse;
 import org.example.deokgilserver.domain.event.repository.EventRepository;
 import org.example.deokgilserver.domain.event.presentation.dto.request.CreateEventRequest;
 import org.example.deokgilserver.domain.event.presentation.dto.response.CreateEventResponse;
 import org.example.deokgilserver.domain.notification.repository.NotificationRepository;
 import org.example.deokgilserver.domain.notification.service.NotificationService;
+import org.example.deokgilserver.domain.schedule.domain.Schedule;
+import org.example.deokgilserver.domain.schedule.domain.enums.ScheduleStatus;
+import org.example.deokgilserver.domain.schedule.domain.enums.ScheduleType;
 import org.example.deokgilserver.domain.schedule.repository.ScheduleRepository;
 import org.example.deokgilserver.domain.user.domain.User;
 import org.example.deokgilserver.domain.user.domain.enums.UserRole;
@@ -124,5 +128,66 @@ class EventServiceImplTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.EVENT_NOT_FOUND);
+    }
+
+    @Test
+    void 지난_행사_상세_조회에_성공한다() {
+        eventService = newService();
+        User user = activeUser(userId);
+        UUID eventId = UUID.randomUUID();
+        Event past = event(user, "아이브 팝업스토어", LocalDateTime.now().minusDays(5), "더현대 서울");
+        ReflectionTestUtils.setField(past, "id", eventId);
+
+        Schedule schedule = Schedule.builder()
+                .event(past).type(ScheduleType.MOVE).title("행사장으로 출발")
+                .description("예상 이동 시간 50분")
+                .startAt(past.getStartAt().minusMinutes(50)).endAt(past.getStartAt())
+                .build();
+
+        when(userRepository.findByIdAndStatus(userId, UserStatus.ACTIVE)).thenReturn(Optional.of(user));
+        when(eventRepository.findByIdAndStatus(eventId, EventStatus.ACTIVE)).thenReturn(Optional.of(past));
+        when(scheduleRepository.findByEventIdAndStatusOrderByStartAtAsc(eventId, ScheduleStatus.ACTIVE))
+                .thenReturn(List.of(schedule));
+
+        EventHistoryDetailResponse response = eventService.getEventHistoryDetail(userId, eventId);
+
+        assertThat(response.title()).isEqualTo("아이브 팝업스토어");
+        assertThat(response.completed()).isTrue();
+        assertThat(response.schedules()).hasSize(1);
+        assertThat(response.schedules().get(0).description()).isEqualTo("예상 이동 시간 50분");
+    }
+
+    @Test
+    void 아직_종료되지_않은_행사는_상세조회시_예외가_발생한다() {
+        eventService = newService();
+        User user = activeUser(userId);
+        UUID eventId = UUID.randomUUID();
+        Event upcoming = event(user, "아이브 콘서트", LocalDateTime.now().plusDays(3), "KSPO DOME");
+        ReflectionTestUtils.setField(upcoming, "id", eventId);
+
+        when(userRepository.findByIdAndStatus(userId, UserStatus.ACTIVE)).thenReturn(Optional.of(user));
+        when(eventRepository.findByIdAndStatus(eventId, EventStatus.ACTIVE)).thenReturn(Optional.of(upcoming));
+
+        assertThatThrownBy(() -> eventService.getEventHistoryDetail(userId, eventId))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.EVENT_NOT_ENDED);
+    }
+
+    @Test
+    void 다른_사용자의_지난_행사는_상세조회할_수_없다() {
+        eventService = newService();
+        User owner = activeUser(UUID.randomUUID());
+        UUID eventId = UUID.randomUUID();
+        Event past = event(owner, "아이브 팝업스토어", LocalDateTime.now().minusDays(5), "더현대 서울");
+        ReflectionTestUtils.setField(past, "id", eventId);
+
+        when(userRepository.findByIdAndStatus(userId, UserStatus.ACTIVE)).thenReturn(Optional.of(activeUser(userId)));
+        when(eventRepository.findByIdAndStatus(eventId, EventStatus.ACTIVE)).thenReturn(Optional.of(past));
+
+        assertThatThrownBy(() -> eventService.getEventHistoryDetail(userId, eventId))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.EVENT_ACCESS_DENIED);
     }
 }
