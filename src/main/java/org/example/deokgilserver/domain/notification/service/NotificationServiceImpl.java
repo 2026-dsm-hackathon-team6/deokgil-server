@@ -4,6 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.example.deokgilserver.common.exception.BusinessException;
 import org.example.deokgilserver.common.exception.ErrorCode;
 import org.example.deokgilserver.common.push.PushNotificationClient;
+import org.example.deokgilserver.common.push.PushNotificationException;
 import org.example.deokgilserver.domain.event.domain.Event;
 import org.example.deokgilserver.domain.notification.domain.Notification;
 import org.example.deokgilserver.domain.notification.domain.enums.NotificationType;
@@ -59,6 +60,7 @@ public class NotificationServiceImpl implements NotificationService {
         scheduleIfFuture(event, NotificationType.DEPARTURE, event.getStartAt().minusHours(DEFAULT_DEPARTURE_BUFFER_HOURS), now);
         scheduleIfFuture(event, NotificationType.PERFORMANCE_START, event.getStartAt().minusMinutes(DEFAULT_PERFORMANCE_BUFFER_MINUTES), now);
         scheduleIfFuture(event, NotificationType.RETURN, event.getEndAt(), now);
+        log.info("행사 알림 예약 완료: eventId={}", event.getId());
     }
 
     private void scheduleIfFuture(Event event, NotificationType type, LocalDateTime notifyAt, LocalDateTime now) {
@@ -82,6 +84,10 @@ public class NotificationServiceImpl implements NotificationService {
     @Transactional
     public void dispatchDueNotifications() {
         List<Notification> due = notificationRepository.findByNotifyAtBeforeAndSentAtIsNullAndEnabledTrue(LocalDateTime.now());
+        if (due.isEmpty()) {
+            return;
+        }
+        log.info("알림 발송 대상 {}건 처리 시작", due.size());
 
         for (Notification notification : due) {
             try {
@@ -102,11 +108,22 @@ public class NotificationServiceImpl implements NotificationService {
             return;
         }
 
-        pushNotificationClient.send(
-                user.getFcmToken(),
-                NotificationMessageFactory.titleFor(notification),
-                NotificationMessageFactory.bodyFor(notification)
-        );
+        try {
+            pushNotificationClient.send(
+                    user.getFcmToken(),
+                    NotificationMessageFactory.titleFor(notification),
+                    NotificationMessageFactory.bodyFor(notification)
+            );
+        } catch (PushNotificationException e) {
+            if (e.isInvalidToken()) {
+                // 토큰 자체가 죽어서 재시도해도 절대 성공하지 못하는 경우 - 지워두면 다음
+                // 스케줄 주기부터는 위쪽의 hasText 체크에서 바로 걸러져 헛된 재시도가 없어진다.
+                // 엔티티 변경은 이 메서드가 실행되는 @Transactional 커밋 시 자동 반영된다.
+                user.clearFcmToken();
+                log.info("만료/폐기된 FCM 토큰을 정리했습니다 (userId={})", user.getId());
+            }
+            throw e;
+        }
         notification.markSent();
     }
 

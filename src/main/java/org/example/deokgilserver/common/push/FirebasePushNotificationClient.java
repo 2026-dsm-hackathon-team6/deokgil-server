@@ -4,12 +4,25 @@ import com.google.firebase.FirebaseApp;
 import com.google.firebase.messaging.FirebaseMessaging;
 import com.google.firebase.messaging.FirebaseMessagingException;
 import com.google.firebase.messaging.Message;
+import com.google.firebase.messaging.MessagingErrorCode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+
+import java.util.Set;
 
 @Slf4j
 @Component
 public class FirebasePushNotificationClient implements PushNotificationClient {
+
+    // 이 토큰으로는 재시도해도 절대 성공하지 못하는 에러코드 - 앱 삭제/토큰 만료(UNREGISTERED),
+    // 다른 프로젝트 발급 토큰(SENDER_ID_MISMATCH), 형식 자체가 잘못된 토큰(INVALID_ARGUMENT).
+    // QUOTA_EXCEEDED/UNAVAILABLE/INTERNAL 등은 토큰과 무관한 일시적 실패라 여기 포함하지 않는다 -
+    // 그런 경우까지 토큰을 지우면, 멀쩡한 토큰을 재등록 전까지 알림을 못 받게 만드는 셈이다.
+    private static final Set<MessagingErrorCode> INVALID_TOKEN_ERROR_CODES = Set.of(
+            MessagingErrorCode.UNREGISTERED,
+            MessagingErrorCode.SENDER_ID_MISMATCH,
+            MessagingErrorCode.INVALID_ARGUMENT
+    );
 
     private final FirebaseApp firebaseApp;
 
@@ -39,11 +52,9 @@ public class FirebasePushNotificationClient implements PushNotificationClient {
         try {
             FirebaseMessaging.getInstance(firebaseApp).send(message);
         } catch (FirebaseMessagingException e) {
-            // 토큰이 만료/폐기된 경우도 여기 포함된다 — 지금은 재시도만 하고 넘어가지만,
-            // 향후 e.getMessagingErrorCode()가 UNREGISTERED일 때 User.fcmToken을 지우는
-            // 정리 로직을 추가하면 더 정확하다.
             log.warn("FCM 발송 실패: {}", e.getMessagingErrorCode());
-            throw new PushNotificationException("푸시 알림 발송에 실패했습니다.", e);
+            boolean invalidToken = INVALID_TOKEN_ERROR_CODES.contains(e.getMessagingErrorCode());
+            throw new PushNotificationException("푸시 알림 발송에 실패했습니다.", e, invalidToken);
         }
     }
 }
