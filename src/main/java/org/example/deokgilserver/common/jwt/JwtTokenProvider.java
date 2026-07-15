@@ -89,6 +89,32 @@ public class JwtTokenProvider {
         }
     }
 
+    /**
+     * 로그아웃 전용: 서명은 반드시 유효해야 하지만 만료는 허용한다. Authorization 헤더는
+     * 쿠키가 아니라 SameSite 제약을 받지 않으므로, 쿠키(refresh token)가 cross-site 요청이라
+     * 브라우저에 의해 아예 전송되지 않는 상황에서도 access token으로 로그아웃 대상 사용자를
+     * 식별할 수 있게 해준다. 만료된 access token은 일반 API 인증에는 못 쓰지만(validateToken이
+     * 거부), "이 refresh token을 지워라"는 자기 자신에 대한 로그아웃 요청에 한해서는 서명만
+     * 유효하면 굳이 만료 여부를 따질 이유가 없다 — 어차피 지우는 대상은 그 토큰이 가리키는
+     * 사용자 자신의 세션뿐이라 위조된 서명이 아닌 한 악용 여지가 없다.
+     */
+    public UUID getUserIdIgnoringExpiration(String token, TokenType expectedType) {
+        Claims claims;
+        try {
+            claims = parseClaims(token);
+        } catch (ExpiredJwtException e) {
+            claims = e.getClaims();
+        } catch (JwtException | IllegalArgumentException e) {
+            throw new BusinessException(ErrorCode.INVALID_TOKEN);
+        }
+
+        String actualType = claims.get(TYPE_CLAIM, String.class);
+        if (!expectedType.name().equals(actualType)) {
+            throw new BusinessException(ErrorCode.INVALID_TOKEN);
+        }
+        return UUID.fromString(claims.getSubject());
+    }
+
     private Claims parseClaims(String token) {
         return Jwts.parser()
                 .verifyWith(key)

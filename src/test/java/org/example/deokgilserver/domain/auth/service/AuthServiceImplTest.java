@@ -233,10 +233,55 @@ class AuthServiceImplTest {
     }
 
     @Test
-    void 로그아웃하면_리프레시_토큰이_삭제된다() {
+    void 유효한_리프레시_토큰으로_로그아웃하면_해당_사용자의_리프레시_토큰이_삭제된다() {
         UUID userId = UUID.randomUUID();
+        when(jwtTokenProvider.getUserId("refresh-token")).thenReturn(userId);
 
-        authService.logout(userId);
+        authService.logout("refresh-token", null);
+
+        verify(jwtTokenProvider).validateToken("refresh-token", org.example.deokgilserver.common.jwt.TokenType.REFRESH);
+        verify(refreshTokenRepository).delete(userId);
+    }
+
+    @Test
+    void 리프레시_토큰_쿠키가_없고_액세스_토큰도_없으면_아무것도_삭제하지_않는다() {
+        authService.logout(null, null);
+
+        verifyNoInteractions(refreshTokenRepository);
+    }
+
+    @Test
+    void 유효하지_않은_리프레시_토큰과_액세스_토큰_없이_로그아웃해도_예외_없이_처리된다() {
+        doThrow(new BusinessException(ErrorCode.INVALID_TOKEN))
+                .when(jwtTokenProvider).validateToken("invalid-token", org.example.deokgilserver.common.jwt.TokenType.REFRESH);
+
+        authService.logout("invalid-token", null);
+
+        verify(refreshTokenRepository, never()).delete(any());
+    }
+
+    @Test
+    void 리프레시_토큰_쿠키가_없어도_액세스_토큰이_있으면_그걸로_식별해서_삭제한다() {
+        // cross-site 배포에서 refresh_token 쿠키가 SameSite 정책상 전송되지 않는 상황을
+        // 시뮬레이션한다 - Authorization 헤더(access token)는 쿠키가 아니므로 이 경우에도 전송된다.
+        UUID userId = UUID.randomUUID();
+        when(jwtTokenProvider.getUserIdIgnoringExpiration("access-token", org.example.deokgilserver.common.jwt.TokenType.ACCESS))
+                .thenReturn(userId);
+
+        authService.logout(null, "access-token");
+
+        verify(refreshTokenRepository).delete(userId);
+    }
+
+    @Test
+    void 만료된_리프레시_토큰이면_만료됐어도_유효한_액세스_토큰으로_폴백한다() {
+        UUID userId = UUID.randomUUID();
+        doThrow(new BusinessException(ErrorCode.TOKEN_EXPIRED))
+                .when(jwtTokenProvider).validateToken("expired-refresh-token", org.example.deokgilserver.common.jwt.TokenType.REFRESH);
+        when(jwtTokenProvider.getUserIdIgnoringExpiration("access-token", org.example.deokgilserver.common.jwt.TokenType.ACCESS))
+                .thenReturn(userId);
+
+        authService.logout("expired-refresh-token", "access-token");
 
         verify(refreshTokenRepository).delete(userId);
     }

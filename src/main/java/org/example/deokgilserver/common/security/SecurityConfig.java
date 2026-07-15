@@ -35,7 +35,11 @@ public class SecurityConfig {
             "/api/v1/auth/signup/**",
             "/api/v1/auth/login/**",
             "/api/v1/auth/reissue",
-            "/api/v1/auth/csrf-token"
+            "/api/v1/auth/csrf-token",
+            // access token이 이미 만료된 상태에서도 로그아웃(refresh token 무효화 + 쿠키 삭제)이
+            // 가능해야 하므로 인증을 요구하지 않는다 - 신원 확인은 refresh token 쿠키로 대신한다
+            // (AuthServiceImpl.logout 참고). CSRF 보호는 CSRF_PROTECTED_PATHS로 별도 유지된다.
+            "/api/v1/auth/logout"
     };
 
     /**
