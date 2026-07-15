@@ -15,6 +15,7 @@ import org.example.deokgilserver.domain.schedule.presentation.dto.response.Updat
 import org.example.deokgilserver.domain.schedule.repository.ScheduleRepository;
 import org.example.deokgilserver.domain.user.domain.enums.UserStatus;
 import org.example.deokgilserver.domain.user.repository.UserRepository;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,6 +26,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @Transactional(readOnly = true)
 public class ScheduleServiceImpl implements ScheduleService {
@@ -64,7 +66,9 @@ public class ScheduleServiceImpl implements ScheduleService {
             throw new BusinessException(ErrorCode.SCHEDULE_ALREADY_EXISTS);
         }
 
+        log.info("AI 일정 생성 요청: eventId={}", eventId);
         List<GeneratedSchedule> generated = scheduleExtractionClient.generate(event, request);
+        log.info("AI 일정 생성 완료: eventId={}, count={}", eventId, generated.size());
         validateGeneratedSchedules(event, generated);
 
         List<Schedule> saved = scheduleRepository.saveAll(
@@ -113,6 +117,7 @@ public class ScheduleServiceImpl implements ScheduleService {
                 .map(ScheduleResponse::from)
                 .toList();
 
+        log.info("일정 수정 완료: userId={}, count={}", userId, updated.size());
         return new UpdateScheduleResponse("일정이 수정되었습니다.", schedules);
     }
 
@@ -223,6 +228,7 @@ public class ScheduleServiceImpl implements ScheduleService {
         }
 
         schedule.delete();
+        log.info("일정 삭제 완료: userId={}, scheduleId={}", userId, scheduleId);
     }
 
     // IDOR 방지: scheduleId만으로 조회하지 않고, 그 일정이 속한 행사의 소유자가 요청자(userId)와

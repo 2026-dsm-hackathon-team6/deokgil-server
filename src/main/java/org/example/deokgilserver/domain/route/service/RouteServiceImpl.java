@@ -1,5 +1,6 @@
 package org.example.deokgilserver.domain.route.service;
 
+import lombok.extern.slf4j.Slf4j;
 import org.example.deokgilserver.common.exception.BusinessException;
 import org.example.deokgilserver.common.exception.ErrorCode;
 import org.example.deokgilserver.common.location.Coordinate;
@@ -29,6 +30,7 @@ import java.util.UUID;
  * 카카오 모빌리티 길찾기 같은 정식 경로 탐색 API 없이도 "대략 얼마나 걸리는지" 감을 주는
  * MVP 수준의 근사치이며, 요청에 담긴 장소 순서를 그대로 방문 순서로 사용한다(순서 최적화는 하지 않음).
  */
+@Slf4j
 @Service
 @Transactional(readOnly = true)
 public class RouteServiceImpl implements RouteService {
@@ -71,10 +73,13 @@ public class RouteServiceImpl implements RouteService {
 
         try {
             List<StopCandidate> candidates = buildCandidates(event, venueCoordinate, request);
-            return computeRoute(event.getId(), event.getStartAt(), candidates, request.transportation());
+            RouteRecommendResponse response = computeRoute(event.getId(), event.getStartAt(), candidates, request.transportation());
+            log.info("동선 추천 완료: eventId={}, stopCount={}", event.getId(), candidates.size());
+            return response;
         } catch (BusinessException e) {
             throw e;
         } catch (Exception e) {
+            log.warn("동선 추천 실패: eventId={}, message={}", event.getId(), e.getMessage());
             throw new BusinessException(ErrorCode.ROUTE_GENERATION_FAILED);
         }
     }

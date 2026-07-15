@@ -13,6 +13,7 @@ import org.example.deokgilserver.domain.event.presentation.dto.response.Facility
 import org.example.deokgilserver.domain.event.repository.EventRepository;
 import org.example.deokgilserver.domain.user.domain.enums.UserStatus;
 import org.example.deokgilserver.domain.user.repository.UserRepository;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,6 +21,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @Transactional(readOnly = true)
 public class EventMapServiceImpl implements EventMapService {
@@ -61,6 +63,7 @@ public class EventMapServiceImpl implements EventMapService {
 
         Coordinate coordinate = eventLocationResolver.resolve(event, ErrorCode.LOCATION_NOT_FOUND);
         List<FacilityResponse> facilities = findNearbyFacilities(coordinate);
+        log.info("행사 지도 조회 완료: eventId={}, facilityCount={}", eventId, facilities.size());
 
         return new EventMapResponse(
                 event.getPlaceName(),

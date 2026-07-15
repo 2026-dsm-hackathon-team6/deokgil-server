@@ -14,6 +14,7 @@ import org.example.deokgilserver.domain.event.presentation.dto.response.Briefing
 import org.example.deokgilserver.domain.event.repository.EventRepository;
 import org.example.deokgilserver.domain.user.domain.enums.UserStatus;
 import org.example.deokgilserver.domain.user.repository.UserRepository;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,6 +22,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @Transactional(readOnly = true)
 public class BriefingServiceImpl implements BriefingService {
@@ -83,7 +85,10 @@ public class BriefingServiceImpl implements BriefingService {
         }
         // 아직 체크리스트를 생성한 적 없는 행사면, 조회 시점에 임시로 추천만 해서 보여준다
         // (GET 요청이므로 여기서 DB에 저장하지는 않는다 — 저장은 체크리스트 생성 API의 책임).
-        return checklistExtractionClient.generateItems(event.getTitle(), weather);
+        log.info("AI 브리핑 준비물 임시 생성 요청: eventId={}", event.getId());
+        List<String> items = checklistExtractionClient.generateItems(event.getTitle(), weather);
+        log.info("AI 브리핑 준비물 임시 생성 완료: eventId={}, count={}", event.getId(), items.size());
+        return items;
     }
 
     // IDOR 방지: eventId만으로 조회하지 않고 요청자(userId)가 실제 소유자인지 검증한다
