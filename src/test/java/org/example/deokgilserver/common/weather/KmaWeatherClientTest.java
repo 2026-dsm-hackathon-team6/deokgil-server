@@ -3,6 +3,9 @@ package org.example.deokgilserver.common.weather;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import java.time.LocalDateTime;
+import java.util.List;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 class KmaWeatherClientTest {
@@ -28,5 +31,37 @@ class KmaWeatherClientTest {
 
         assertThat(grid.nx()).isEqualTo(60);
         assertThat(grid.ny()).isEqualTo(127);
+    }
+
+    @Test
+    void 예보_제공_범위를_벗어난_시각은_예외_없이_UNKNOWN을_반환한다() {
+        KmaWeatherClient client = new KmaWeatherClient(WebClient.builder(), "dummy-key");
+        List<KmaWeatherClient.Item> items = List.of(
+                new KmaWeatherClient.Item("PTY", "20260716", "0500", "0"),
+                new KmaWeatherClient.Item("SKY", "20260716", "0500", "1"),
+                new KmaWeatherClient.Item("PTY", "20260718", "2300", "0"),
+                new KmaWeatherClient.Item("SKY", "20260718", "2300", "1")
+        );
+        LocalDateTime farFutureEvent = LocalDateTime.of(2026, 12, 25, 19, 0);
+
+        WeatherCondition condition = client.resolveCondition(items, farFutureEvent);
+
+        assertThat(condition).isEqualTo(WeatherCondition.UNKNOWN);
+    }
+
+    @Test
+    void 예보_제공_범위_안이면_가장_가까운_시각의_날씨를_반환한다() {
+        KmaWeatherClient client = new KmaWeatherClient(WebClient.builder(), "dummy-key");
+        List<KmaWeatherClient.Item> items = List.of(
+                new KmaWeatherClient.Item("PTY", "20260716", "0500", "1"),
+                new KmaWeatherClient.Item("SKY", "20260716", "0500", "4"),
+                new KmaWeatherClient.Item("PTY", "20260716", "0600", "0"),
+                new KmaWeatherClient.Item("SKY", "20260716", "0600", "1")
+        );
+        LocalDateTime withinRange = LocalDateTime.of(2026, 7, 16, 5, 10);
+
+        WeatherCondition condition = client.resolveCondition(items, withinRange);
+
+        assertThat(condition).isEqualTo(WeatherCondition.RAIN);
     }
 }

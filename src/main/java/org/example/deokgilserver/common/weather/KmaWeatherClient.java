@@ -128,7 +128,8 @@ public class KmaWeatherClient implements WeatherClient {
 
     // 응답에는 발표 시점 이후 여러 날짜/시각의 예보가 한꺼번에 들어있다. targetTime과 가장
     // 가까운 예보 시각을 찾고, 그 시각의 PTY(강수형태)/SKY(하늘상태) 값으로 날씨를 판단한다.
-    private WeatherCondition resolveCondition(List<Item> items, LocalDateTime targetTime) {
+    // 단위 테스트에서 예보 범위 판정 로직을 직접 검증할 수 있도록 package-private으로 둔다.
+    WeatherCondition resolveCondition(List<Item> items, LocalDateTime targetTime) {
         Map<LocalDateTime, Map<String, String>> byFcstTime = new LinkedHashMap<>();
         for (Item item : items) {
             if (item.fcstDate() == null || item.fcstTime() == null || item.category() == null) {
@@ -141,6 +142,22 @@ public class KmaWeatherClient implements WeatherClient {
 
         if (byFcstTime.isEmpty()) {
             throw new BusinessException(ErrorCode.WEATHER_API_ERROR);
+        }
+
+        // 단기예보는 발표 시각 기준 최대 D+2일까지만 응답에 들어있다. targetTime이 그 범위를
+        // 넘어서면(행사가 며칠~몇 달 뒤라서 아직 예보가 없는 경우) "가장 가까운" 항목을 그대로
+        // 골라버리면 전혀 상관없는 시각의 예보를 그 행사 날씨인 것처럼 잘못 알려주게 된다.
+        // 이 경우는 API 실패가 아니라 "아직 예보가 없는" 정상 상황이라 에러를 던지지 않고
+        // UNKNOWN으로 조용히 처리한다 — 호출부(브리핑/체크리스트)는 이미 UNKNOWN을
+        // "알 수 없음"으로 다룰 수 있다.
+        LocalDateTime latestAvailable = byFcstTime.keySet().stream()
+                .max(Comparator.naturalOrder())
+                .orElseThrow(() -> new BusinessException(ErrorCode.WEATHER_API_ERROR));
+
+        if (targetTime.isAfter(latestAvailable)) {
+            log.info("예보 제공 범위(~{})를 벗어난 날씨 조회 요청 - UNKNOWN으로 처리합니다: targetTime={}",
+                    latestAvailable, targetTime);
+            return WeatherCondition.UNKNOWN;
         }
 
         LocalDateTime nearest = byFcstTime.keySet().stream()
@@ -207,6 +224,6 @@ public class KmaWeatherClient implements WeatherClient {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    private record Item(String category, String fcstDate, String fcstTime, String fcstValue) {
+    record Item(String category, String fcstDate, String fcstTime, String fcstValue) {
     }
 }
