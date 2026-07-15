@@ -3,9 +3,11 @@ package org.example.deokgilserver.domain.checklist.service;
 import com.anthropic.client.AnthropicClient;
 import com.anthropic.client.okhttp.AnthropicOkHttpClient;
 import com.anthropic.models.messages.MessageCreateParams;
+import com.anthropic.models.messages.StopReason;
 import com.anthropic.models.messages.StructuredMessage;
 import com.anthropic.models.messages.StructuredMessageCreateParams;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
+import lombok.extern.slf4j.Slf4j;
 import org.example.deokgilserver.common.exception.BusinessException;
 import org.example.deokgilserver.common.exception.ErrorCode;
 import org.example.deokgilserver.common.weather.WeatherCondition;
@@ -14,6 +16,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 
+@Slf4j
 @Component
 public class ClaudeChecklistExtractionClient implements ChecklistExtractionClient {
 
@@ -53,10 +56,17 @@ public class ClaudeChecklistExtractionClient implements ChecklistExtractionClien
         try {
             response = anthropicClient.messages().create(params);
         } catch (Exception e) {
+            log.error("Claude 준비물 목록 생성 API 호출 실패", e);
             throw new BusinessException(ErrorCode.AI_GENERATION_FAILED);
         }
 
-        if (response.stopReason().filter(reason -> reason.equals(com.anthropic.models.messages.StopReason.REFUSAL)).isPresent()) {
+        StopReason stopReason = response.stopReason().orElse(null);
+        if (StopReason.REFUSAL.equals(stopReason)) {
+            log.warn("Claude가 준비물 목록 생성을 거부했습니다.");
+            throw new BusinessException(ErrorCode.AI_GENERATION_FAILED);
+        }
+        if (StopReason.MAX_TOKENS.equals(stopReason)) {
+            log.warn("Claude 응답이 max_tokens에 도달해 잘렸습니다.");
             throw new BusinessException(ErrorCode.AI_GENERATION_FAILED);
         }
 
@@ -65,6 +75,8 @@ public class ClaudeChecklistExtractionClient implements ChecklistExtractionClien
                 .findFirst()
                 .map(com.anthropic.models.messages.StructuredTextBlock::text)
                 .orElseThrow(() -> new BusinessException(ErrorCode.AI_GENERATION_FAILED));
+
+        log.info("Claude 준비물 목록 생성 응답: {}", generated.items());
 
         if (generated.items() == null || generated.items().isEmpty()) {
             throw new BusinessException(ErrorCode.AI_GENERATION_FAILED);

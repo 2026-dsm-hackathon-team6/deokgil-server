@@ -3,9 +3,11 @@ package org.example.deokgilserver.domain.schedule.service;
 import com.anthropic.client.AnthropicClient;
 import com.anthropic.client.okhttp.AnthropicOkHttpClient;
 import com.anthropic.models.messages.MessageCreateParams;
+import com.anthropic.models.messages.StopReason;
 import com.anthropic.models.messages.StructuredMessage;
 import com.anthropic.models.messages.StructuredMessageCreateParams;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
+import lombok.extern.slf4j.Slf4j;
 import org.example.deokgilserver.common.exception.BusinessException;
 import org.example.deokgilserver.common.exception.ErrorCode;
 import org.example.deokgilserver.domain.event.domain.Event;
@@ -18,14 +20,21 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Component
 public class ClaudeScheduleExtractionClient implements ScheduleExtractionClient {
 
     private static final String SYSTEM_PROMPT = """
             사용자가 참여할 행사 정보와 목적, 우선순위, 이동 수단이 주어집니다.
-            행사 시작 시간과 종료 시간 사이(포함)에서만 일정을 배치하고, 일정끼리 시간이 겹치지 않게 하세요.
-            일정 종류(type)는 반드시 다음 중 하나여야 합니다: MOVE, WAITING, GOODS, VISIT, PERFORMANCE, RETURN, ETC.
-            시간은 ISO-8601(yyyy-MM-dd'T'HH:mm:ss) 형식으로 작성하세요.
+            이 정보를 바탕으로 일정을 생성해 정해진 JSON 스키마 형식으로만 응답하세요.
+            설명, 인사말, 마크다운 코드블록 등 스키마 이외의 텍스트는 절대 포함하지 마세요.
+
+            - 행사 시작 시간과 종료 시간 사이(포함)에서만 일정을 배치하세요.
+            - 일정끼리 시간이 겹치지 않게 하세요.
+            - 일정 종류(type)는 반드시 다음 중 하나여야 합니다: MOVE, WAITING, GOODS, VISIT, PERFORMANCE, RETURN, ETC.
+            - 시간은 반드시 ISO-8601(yyyy-MM-dd'T'HH:mm:ss) 형식으로 작성하세요.
+            - scheduleId, eventId 같은 식별자는 서버가 저장 시 별도로 부여하므로 생성하지 마세요.
+              type, title, startAt, endAt 필드만 채우면 됩니다.
             """;
 
     private final AnthropicClient anthropicClient;
@@ -72,10 +81,17 @@ public class ClaudeScheduleExtractionClient implements ScheduleExtractionClient 
         try {
             response = anthropicClient.messages().create(params);
         } catch (Exception e) {
+            log.error("Claude 일정 생성 API 호출 실패", e);
             throw new BusinessException(ErrorCode.AI_GENERATION_FAILED);
         }
 
-        if (response.stopReason().filter(reason -> reason.equals(com.anthropic.models.messages.StopReason.REFUSAL)).isPresent()) {
+        StopReason stopReason = response.stopReason().orElse(null);
+        if (StopReason.REFUSAL.equals(stopReason)) {
+            log.warn("Claude가 일정 생성을 거부했습니다.");
+            throw new BusinessException(ErrorCode.AI_GENERATION_FAILED);
+        }
+        if (StopReason.MAX_TOKENS.equals(stopReason)) {
+            log.warn("Claude 응답이 max_tokens에 도달해 잘렸습니다.");
             throw new BusinessException(ErrorCode.AI_GENERATION_FAILED);
         }
 
@@ -84,6 +100,8 @@ public class ClaudeScheduleExtractionClient implements ScheduleExtractionClient 
                 .findFirst()
                 .map(com.anthropic.models.messages.StructuredTextBlock::text)
                 .orElseThrow(() -> new BusinessException(ErrorCode.AI_GENERATION_FAILED));
+
+        log.info("Claude 일정 생성 응답: {}", generated.schedules());
 
         if (generated.schedules() == null || generated.schedules().isEmpty()) {
             throw new BusinessException(ErrorCode.AI_GENERATION_FAILED);
@@ -99,6 +117,7 @@ public class ClaudeScheduleExtractionClient implements ScheduleExtractionClient 
                     ))
                     .toList();
         } catch (Exception e) {
+            log.warn("Claude 일정 생성 결과 파싱 실패: {}", e.getMessage());
             throw new BusinessException(ErrorCode.AI_GENERATION_FAILED);
         }
     }
