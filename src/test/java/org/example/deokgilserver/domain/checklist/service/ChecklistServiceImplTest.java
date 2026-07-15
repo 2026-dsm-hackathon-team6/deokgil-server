@@ -170,4 +170,69 @@ class ChecklistServiceImplTest {
 
         verifyNoInteractions(weatherClient, checklistExtractionClient);
     }
+
+    @Test
+    void 내일_시작하고_체크리스트가_이미_있는_행사만_재생성한다() {
+        checklistService = newService();
+        User user = activeUser(userId);
+        Event withChecklist = event(UUID.randomUUID(), user);
+        Event withoutChecklist = event(UUID.randomUUID(), user);
+        Coordinate coordinate = new Coordinate(BigDecimal.valueOf(37.5), BigDecimal.valueOf(127.1));
+
+        when(eventRepository.findByStatusAndStartAtBetween(eq(EventStatus.ACTIVE), any(), any()))
+                .thenReturn(List.of(withChecklist, withoutChecklist));
+        when(checklistRepository.findByEventId(withChecklist.getId()))
+                .thenReturn(List.of(org.example.deokgilserver.domain.checklist.domain.Checklist.builder()
+                        .event(withChecklist).content("기존 항목").build()));
+        when(checklistRepository.findByEventId(withoutChecklist.getId())).thenReturn(List.of());
+        when(eventLocationResolver.resolve(withChecklist, ErrorCode.EVENT_LOCATION_REQUIRED)).thenReturn(coordinate);
+        when(weatherClient.getForecast(eq(coordinate), any())).thenReturn(WeatherCondition.CLOUDY);
+        when(checklistExtractionClient.generateItems(anyString(), any())).thenReturn(List.of("우비"));
+        when(checklistRepository.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
+
+        checklistService.regenerateChecklistsForTomorrowEvents();
+
+        verify(checklistRepository).deleteByEventId(withChecklist.getId());
+        verify(eventLocationResolver, never()).resolve(eq(withoutChecklist), any());
+    }
+
+    @Test
+    void 내일_시작하는_행사가_없으면_아무것도_하지_않는다() {
+        checklistService = newService();
+        when(eventRepository.findByStatusAndStartAtBetween(eq(EventStatus.ACTIVE), any(), any()))
+                .thenReturn(List.of());
+
+        checklistService.regenerateChecklistsForTomorrowEvents();
+
+        verifyNoInteractions(checklistRepository, eventLocationResolver, weatherClient, checklistExtractionClient);
+    }
+
+    @Test
+    void 재생성_중_한_건이_실패해도_나머지_행사는_계속_처리한다() {
+        checklistService = newService();
+        User user = activeUser(userId);
+        Event failing = event(UUID.randomUUID(), user);
+        Event succeeding = event(UUID.randomUUID(), user);
+        Coordinate coordinate = new Coordinate(BigDecimal.valueOf(37.5), BigDecimal.valueOf(127.1));
+
+        when(eventRepository.findByStatusAndStartAtBetween(eq(EventStatus.ACTIVE), any(), any()))
+                .thenReturn(List.of(failing, succeeding));
+        when(checklistRepository.findByEventId(failing.getId()))
+                .thenReturn(List.of(org.example.deokgilserver.domain.checklist.domain.Checklist.builder()
+                        .event(failing).content("기존 항목").build()));
+        when(checklistRepository.findByEventId(succeeding.getId()))
+                .thenReturn(List.of(org.example.deokgilserver.domain.checklist.domain.Checklist.builder()
+                        .event(succeeding).content("기존 항목").build()));
+        when(eventLocationResolver.resolve(failing, ErrorCode.EVENT_LOCATION_REQUIRED))
+                .thenThrow(new BusinessException(ErrorCode.EVENT_LOCATION_REQUIRED));
+        when(eventLocationResolver.resolve(succeeding, ErrorCode.EVENT_LOCATION_REQUIRED)).thenReturn(coordinate);
+        when(weatherClient.getForecast(eq(coordinate), any())).thenReturn(WeatherCondition.CLEAR);
+        when(checklistExtractionClient.generateItems(anyString(), any())).thenReturn(List.of("선크림"));
+        when(checklistRepository.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
+
+        checklistService.regenerateChecklistsForTomorrowEvents();
+
+        verify(checklistRepository).deleteByEventId(succeeding.getId());
+        verify(checklistRepository, never()).deleteByEventId(failing.getId());
+    }
 }

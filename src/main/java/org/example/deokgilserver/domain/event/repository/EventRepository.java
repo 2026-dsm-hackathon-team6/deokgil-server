@@ -37,6 +37,10 @@ public interface EventRepository extends JpaRepository<Event, UUID> {
     List<Event> findByUserIdAndStatusAndEndAtBeforeOrderByStartAtDesc(
             UUID userId, EventStatus status, LocalDateTime now);
 
+    // 시작 시각이 특정 구간(보통 "내일" 하루)에 속하는 삭제되지 않은 행사 조회.
+    // 하루 전 체크리스트 재생성 배치가 사용한다.
+    List<Event> findByStatusAndStartAtBetween(EventStatus status, LocalDateTime startInclusive, LocalDateTime endExclusive);
+
     // 위치 최소 수집: 행사가 끝난 지 오래된 건은 정확한 좌표를 보관할 이유가 없어 비운다.
     // title/date/placeName 같은 행사 기록(history)용 정보는 그대로 남기고 좌표만 지운다.
     @Modifying
